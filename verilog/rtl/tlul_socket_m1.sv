@@ -161,8 +161,8 @@ module tlul_socket_m1 #(
       .DW         ($bits(tlul_pkg::tl_h2d_t)),
       .EnReqStabA (0)
     ) u_reqarb (
-      .clk_i,
-      .rst_ni,
+      .clk_i   (clk_i),
+      .rst_ni  (rst_ni),
       .req_i   ( hrequest    ),
       .data_i  ( hreq_fifo_o ),
       .gnt_o   ( hgrant      ),
@@ -177,8 +177,8 @@ module tlul_socket_m1 #(
       .DW         ($bits(tlul_pkg::tl_h2d_t)),
       .EnReqStabA (0)
     ) u_reqarb (
-      .clk_i,
-      .rst_ni,
+      .clk_i   (clk_i),
+      .rst_ni  (rst_ni),
       .req_i   ( hrequest    ),
       .data_i  ( hreq_fifo_o ),
       .gnt_o   ( hgrant      ),

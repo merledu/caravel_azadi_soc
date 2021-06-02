@@ -99,7 +99,7 @@ module azadi_soc_top_caravel #(
 
   assign io_oeb[1]     =  pwm2_oe ? ~pwm2_oe : ~gpio_oe[1];  // PWM2 is prior
   assign io_out[1]     =  pwm2_oe ?  pwm_o_2 :  gpio_o [1];
-  assign gpio_i[1]     =  io_in[1];;
+  assign gpio_i[1]     =  io_in[1];
   
   assign io_oeb[25:2]  = ~gpio_oe[25:2];
   assign gpio_i[25:2]  =  io_in  [25:2];
@@ -125,7 +125,7 @@ module azadi_soc_top_caravel #(
   assign io_out[30]    =  sd_oe ?  sclk_o  :  gpio_o [30];  // SPI clock_out
   assign gpio_i[30]    =  io_in[30]
 
-  assign io_oeb[31]    = ~(sd_oe | gpio_oe);
+  assign io_oeb[31]    = ~(sd_oe | gpio_oe[31]);
   assign io_out[31]    =  sd_oe ? sd_o : gpio_o[31];
   assign gpio_i[31]    =  io_in[31];
   assign sd_i  [31]    =  io_in[31];
@@ -166,7 +166,7 @@ module azadi_soc_top_caravel #(
     .prog(prog),
 
     // Clocks per bits
-    .clk_per_bits(clk_per_bits) 
+    .clk_per_bits(clk_per_bits), 
 
     // gpios interface
     .gpio_i(gpio_i),

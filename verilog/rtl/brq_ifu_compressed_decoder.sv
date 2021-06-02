@@ -9,9 +9,6 @@
 
 
 module brq_ifu_compressed_decoder (
-    input  logic        clk_i,
-    input  logic        rst_ni,
-    input  logic        valid_i,
     input  logic [31:0] instr_i,
     output logic [31:0] instr_o,
     output logic        is_compressed_o,
@@ -21,8 +18,6 @@ module brq_ifu_compressed_decoder (
 
   // valid_i indicates if instr_i is valid and is used for assertions only.
   // The following signal is used to avoid possible lint errors.
-  logic unused_valid;
-  assign unused_valid = valid_i;
 
   ////////////////////////
   // Compressed decoder //

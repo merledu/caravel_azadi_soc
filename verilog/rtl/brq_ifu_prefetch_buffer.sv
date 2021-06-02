@@ -16,7 +16,7 @@ module brq_ifu_prefetch_buffer #(
     input  logic        branch_i,
     input  logic        branch_spec_i,
     input  logic        predicted_branch_i,
-    input  logic        branch_mispredict_i,
+    // input  logic        branch_mispredict_i,
     input  logic [31:0] addr_i,
 
 
@@ -41,6 +41,8 @@ module brq_ifu_prefetch_buffer #(
     output logic        busy_o
 );
 
+  logic        branch_mispredict_i;
+  assign       branch_mispredict_i = '0;
   localparam int unsigned NUM_REQS  = 2;
 
   logic                branch_suppress;

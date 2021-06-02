@@ -30,7 +30,7 @@ logic         err;
 
 //assign err = '0;
 
-PWM pwm_core(
+pwm pwm_core(
 
 .clk_i      (clk_i),												
 .rst_ni     (rst_ni),												
@@ -42,10 +42,6 @@ PWM pwm_core(
 .be_i       (be),										    
 .rdata_o    (rdata),												
 //.error_o    (err),												
-
-.i_extclk   ('0),
-.i_DC       ('0),
-.i_valid_DC ('0),
 .o_pwm      (pwm_o),
 .o_pwm_2    (pwm_o_2),
 .oe_pwm1    (pwm1_oe),

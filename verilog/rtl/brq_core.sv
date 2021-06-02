@@ -33,7 +33,7 @@ module brq_core #(
     input  logic        clk_i,
     input  logic        rst_ni,
 
-    input  logic        test_en_i,     // enable all clock gates for testing
+    // input  logic        test_en_i,     // enable all clock gates for testing
 
     input  logic [31:0] hart_id_i,
     input  logic [31:0] boot_addr_i,
@@ -102,7 +102,8 @@ module brq_core #(
     output logic        alert_major_o,
     output logic        core_sleep_o
 );
-
+logic        test_en_i;
+assign       test_en_i = 1'b0;
   import brq_pkg::*;
   
   // floating point 
@@ -174,7 +175,7 @@ module brq_core #(
   logic [15:0] instr_rdata_c_id;               // Compressed instruction sampled inside IF stage
   logic        instr_is_compressed_id;
   logic        instr_perf_count_id;
-  logic        instr_bp_taken_id;
+ // logic        instr_bp_taken_id;
   logic        instr_fetch_err;                // Bus error on instr fetch
   logic        instr_fetch_err_plus2;          // Instruction error is misaligned
   logic        illegal_c_insn_id;              // Illegal compressed instruction sent to ID stage
@@ -199,7 +200,7 @@ module brq_core #(
   logic        instr_valid_clear;
   logic        pc_set;
   logic        pc_set_spec;
-  logic        nt_branch_mispredict;
+  //logic        nt_branch_mispredict;
   pc_sel_e     pc_mux_id;                      // Mux selector for next PC
   exc_pc_sel_e exc_pc_mux_id;                  // Mux selector for exception PC
   exc_cause_e  exc_cause;                      // Exception cause
@@ -276,7 +277,7 @@ module brq_core #(
                                        // with wrong priviledge level,
                                        // or missing write permissions
 
-  // Data Memory Control
+  // Data Memory Controlpc_mismatch_alert_o
   logic        lsu_we;
   logic [1:0]  lsu_type;
   logic        lsu_sign_ext;
@@ -470,11 +471,11 @@ module brq_core #(
       .instr_rdata_alu_id_o     ( instr_rdata_alu_id     ),
       .instr_rdata_c_id_o       ( instr_rdata_c_id       ),
       .instr_is_compressed_id_o ( instr_is_compressed_id ),
-      .instr_bp_taken_o         ( instr_bp_taken_id      ),
+     // .instr_bp_taken_o         ( instr_bp_taken_id      ),
       .instr_fetch_err_o        ( instr_fetch_err        ),
       .instr_fetch_err_plus2_o  ( instr_fetch_err_plus2  ),
       .illegal_c_insn_id_o      ( illegal_c_insn_id      ),
-      .dummy_instr_id_o         ( dummy_instr_id         ),
+      //.dummy_instr_id_o         ( dummy_instr_id         ),
       .pc_if_o                  ( pc_if                  ),
       .pc_id_o                  ( pc_id                  ),
 
@@ -483,15 +484,15 @@ module brq_core #(
       .pc_set_i                 ( pc_set                 ),
       .pc_set_spec_i            ( pc_set_spec            ),
       .pc_mux_i                 ( pc_mux_id              ),
-      .nt_branch_mispredict_i   ( nt_branch_mispredict   ),
+     // .nt_branch_mispredict_i   ( nt_branch_mispredict   ),
       .exc_pc_mux_i             ( exc_pc_mux_id          ),
-      .exc_cause                ( exc_cause              ),
-      .dummy_instr_en_i         ( dummy_instr_en         ),
-      .dummy_instr_mask_i       ( dummy_instr_mask       ),
-      .dummy_instr_seed_en_i    ( dummy_instr_seed_en    ),
-      .dummy_instr_seed_i       ( dummy_instr_seed       ),
-      .icache_enable_i          ( icache_enable          ),
-      .icache_inval_i           ( icache_inval           ),
+      // .exc_cause                ( exc_cause              ),
+      // .dummy_instr_en_i         ( dummy_instr_en         ),
+      // .dummy_instr_mask_i       ( dummy_instr_mask       ),
+      // .dummy_instr_seed_en_i    ( dummy_instr_seed_en    ),
+      // .dummy_instr_seed_i       ( dummy_instr_seed       ),
+      // .icache_enable_i          ( icache_enable          ),
+      // .icache_inval_i           ( icache_inval           ),
 
       // branch targets
       .branch_target_ex_i       ( branch_target_ex       ),
@@ -542,7 +543,7 @@ module brq_core #(
       .instr_rdata_alu_i            ( instr_rdata_alu_id       ),
       .instr_rdata_c_i              ( instr_rdata_c_id         ),
       .instr_is_compressed_i        ( instr_is_compressed_id   ),
-      .instr_bp_taken_i             ( instr_bp_taken_id        ),
+      //.instr_bp_taken_i             ( instr_bp_taken_id        ),
 
       // Jumps and branches
       .branch_decision_i            ( branch_decision          ),
@@ -555,7 +556,7 @@ module brq_core #(
       .pc_set_o                     ( pc_set                   ),
       .pc_set_spec_o                ( pc_set_spec              ),
       .pc_mux_o                     ( pc_mux_id                ),
-      .nt_branch_mispredict_o       ( nt_branch_mispredict     ),
+      //.nt_branch_mispredict_o       ( nt_branch_mispredict     ),
       .exc_pc_mux_o                 ( exc_pc_mux_id            ),
       .exc_cause_o                  ( exc_cause                ),
       .icache_inval_o               ( icache_inval             ),
@@ -923,7 +924,7 @@ module brq_core #(
         .clk_i            ( clk_i           ),
         .rst_ni           ( rst_ni          ),
 
-        .test_en_i        ( test_en_i       ),
+     //   .test_en_i        ( test_en_i       ),
         .dummy_instr_id_i ( dummy_instr_id  ),
 
         .raddr_a_i        ( rf_raddr_a      ),
@@ -1132,11 +1133,11 @@ module brq_core #(
       .pc_wb_i                 ( pc_wb                        ),
 
       .data_ind_timing_o       ( data_ind_timing              ),
-      .dummy_instr_en_o        ( dummy_instr_en               ),
-      .dummy_instr_mask_o      ( dummy_instr_mask             ),
-      .dummy_instr_seed_en_o   ( dummy_instr_seed_en          ),
-      .dummy_instr_seed_o      ( dummy_instr_seed             ),
-      .icache_enable_o         ( icache_enable                ),
+      // .dummy_instr_en_o        ( dummy_instr_en               ),
+      // .dummy_instr_mask_o      ( dummy_instr_mask             ),
+      // .dummy_instr_seed_en_o   ( dummy_instr_seed_en          ),
+      // .dummy_instr_seed_o      ( dummy_instr_seed             ),
+      // .icache_enable_o         ( icache_enable                ),
       .csr_shadow_err_o        ( csr_shadow_err               ),
 
       .csr_save_if_i           ( csr_save_if                  ),

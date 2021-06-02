@@ -34,7 +34,7 @@ module brq_idu #(
     input  logic [31:0]               instr_rdata_alu_i,     // from IF-ID pipeline registers
     input  logic [15:0]               instr_rdata_c_i,       // from IF-ID pipeline registers
     input  logic                      instr_is_compressed_i,
-    input  logic                      instr_bp_taken_i,
+   // input  logic                      instr_bp_taken_i,
     output logic                      instr_req_o,
     output logic                      instr_first_cycle_id_o,
     output logic                      instr_valid_clear_o,   // kill instr in IF-ID reg
@@ -48,7 +48,7 @@ module brq_idu #(
     output logic                      pc_set_o,
     output logic                      pc_set_spec_o,
     output brq_pkg::pc_sel_e          pc_mux_o,
-    output logic                      nt_branch_mispredict_o,
+    //output logic                      nt_branch_mispredict_o,
     output brq_pkg::exc_pc_sel_e      exc_pc_mux_o,
     output brq_pkg::exc_cause_e       exc_cause_o,
 
@@ -599,7 +599,7 @@ module brq_idu #(
       .instr_i                        ( instr_rdata_i           ),
       .instr_compressed_i             ( instr_rdata_c_i         ),
       .instr_is_compressed_i          ( instr_is_compressed_i   ),
-      .instr_bp_taken_i               ( instr_bp_taken_i        ),
+     // .instr_bp_taken_i               ( instr_bp_taken_i        ),
       .instr_fetch_err_i              ( instr_fetch_err_i       ),
       .instr_fetch_err_plus2_i        ( instr_fetch_err_plus2_i ),
       .pc_id_i                        ( pc_id_i                 ),
@@ -614,7 +614,7 @@ module brq_idu #(
       .pc_set_o                       ( pc_set_o                ),
       .pc_set_spec_o                  ( pc_set_spec_o           ),
       .pc_mux_o                       ( pc_mux_o                ),
-      .nt_branch_mispredict_o         ( nt_branch_mispredict_o  ),
+     // .nt_branch_mispredict_o         ( nt_branch_mispredict_o  ),
       .exc_pc_mux_o                   ( exc_pc_mux_o            ),
       .exc_cause_o                    ( exc_cause_o             ),
 
@@ -627,7 +627,7 @@ module brq_idu #(
       // jump/branch control
       .branch_set_i                   ( branch_set              ),
       .branch_set_spec_i              ( branch_set_spec         ),
-      .branch_not_set_i               ( branch_not_set          ),
+      //.branch_not_set_i               ( branch_not_set          ),
       .jump_set_i                     ( jump_set                ),
 
       // interrupt signals

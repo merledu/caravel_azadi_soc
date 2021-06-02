@@ -15,7 +15,7 @@ module brq_register_file_ff #(
     input  logic                 clk_i,
     input  logic                 rst_ni,
 
-    input  logic                 test_en_i,
+   // input  logic                 test_en_i,
     input  logic                 dummy_instr_id_i,
 
     //Read port R1
@@ -92,7 +92,7 @@ module brq_register_file_ff #(
   assign rdata_b_o = rf_reg[raddr_b_i];
 
   // Signal not used in FF register file
-  logic unused_test_en;
-  assign unused_test_en = test_en_i;
+ // logic unused_test_en;
+ // assign unused_test_en = test_en_i;
 
 endmodule

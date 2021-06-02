@@ -11,6 +11,7 @@
 
 // Author: Stefan Mach <smach@iis.ee.ethz.ch>
 
+`include "registers.svh"
 module fpnew_fma #(
   parameter fpnew_pkg::fp_format_e   FpFormat    = fpnew_pkg::fp_format_e'(0),
   parameter int unsigned             NumPipeRegs = 0,
@@ -528,7 +529,7 @@ module fpnew_fma #(
   // or right of the (non-carry) MSB of the sum.
   always_comb begin : small_norm
     // Default assignment, discarding carry bit
-    {final_mantissa, sum_sticky_bits} = sum_shifted;
+    {final_mantissa[23:0], sum_sticky_bits} = sum_shifted;
     final_exponent                    = normalized_exponent;
 
     // The normalized sum has overflown, align right and fix exponent

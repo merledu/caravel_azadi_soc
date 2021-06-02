@@ -22,9 +22,8 @@ module debug_rom_one_scratch (
 );
 
   localparam int unsigned RomSize = 13;
-  logic [RomSize-1:0][63:0] mem;
 
-  assign mem = {
+  const logic [RomSize-1:0][63:0] mem = {
     64'h00000000_7b200073,
     64'h7b202473_10802423,
     64'hf1402473_ab1ff06f,

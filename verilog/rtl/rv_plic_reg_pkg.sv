@@ -206,7 +206,7 @@ package rv_plic_reg_pkg;
   } rv_plic_reg2hw_threshold0_reg_t;
 
   typedef struct packed {
-    logic [7:0]  q;
+    logic [5:0]  q;
     logic        qe;
     logic        re;
   } rv_plic_reg2hw_cc0_reg_t;
@@ -222,7 +222,7 @@ package rv_plic_reg_pkg;
   } rv_plic_hw2reg_ip_mreg_t;
 
   typedef struct packed {
-    logic [7:0]  d;
+    logic [5:0]  d;
   } rv_plic_hw2reg_cc0_reg_t;
 
 

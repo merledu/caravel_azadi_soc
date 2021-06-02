@@ -96,8 +96,7 @@ module brq_idu_decoder #(
 
     // Floating point extensions IO
     output fpnew_pkg::roundmode_e fp_rounding_mode_o,      // defines the rounding mode 
-    output brq_pkg::op_b_sel_e    fp_alu_op_b_mux_sel_o,   // operand b selection: reg value or
-                                                           // immediate 
+
     output logic [4:0]            fp_rf_raddr_a_o,
     output logic [4:0]            fp_rf_raddr_b_o,
     output logic [4:0]            fp_rf_raddr_c_o,
@@ -1001,7 +1000,6 @@ module brq_idu_decoder #(
 
     fp_alu_op_mod_o       = 1'b0;
     fp_alu_operator_o     = FMADD;
-    fp_alu_op_b_mux_sel_o = OP_B_IMM; // op_b_sel_e, OP_B_REG_B
 
     unique case (opcode_alu)
 

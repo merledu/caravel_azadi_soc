@@ -11,7 +11,7 @@
 
 // Author: Stefan Mach <smach@iis.ee.ethz.ch>
 
-
+`include "registers.svh"
 module fpnew_noncomp #(
   parameter fpnew_pkg::fp_format_e   FpFormat    = fpnew_pkg::fp_format_e'(0),
   parameter int unsigned             NumPipeRegs = 0,

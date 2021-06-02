@@ -34,7 +34,7 @@ module brq_core_top #(
     input tlul_pkg::tl_d2h_t tl_d_i,
     output tlul_pkg::tl_h2d_t tl_d_o,
 
-    input  logic        test_en_i,     // enable all clk_i gates for testing
+   // input  logic        test_en_i,     // enable all clk_i gates for testing
 
     input  logic [31:0] hart_id_i,
     input  logic [31:0] boot_addr_i,
@@ -105,7 +105,7 @@ brq_core #(
     .clk_i (clk_i),
     .rst_ni(rst_ni),
 
-    .test_en_i (test_en_i),     // enable all clk_i gates for testing
+   // .test_en_i (test_en_i),     // enable all clk_i gates for testing
 
     .hart_id_i  (hart_id_i),
     .boot_addr_i(boot_addr_i),

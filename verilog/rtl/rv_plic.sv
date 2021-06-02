@@ -65,21 +65,19 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   assign cc_id = irq_id_o;
 
   always_comb begin
+    claim = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
       if (claim_re[i]) begin 
          claim[claim_id[i]] = 1'b1;
-       end else begin 
-         claim = '0;
-       end
      end
   end
+  end
   always_comb begin
+    complete = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
       if (complete_we[i]) begin 
          complete[complete_id[i]] = 1'b1;
-      end else begin
-         complete = '0;
-      end
+      end 
     end
   end
 

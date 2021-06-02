@@ -11,6 +11,7 @@
 
 // Author: Stefan Mach <smach@iis.ee.ethz.ch>
 
+`include "registers.svh"
 module fpnew_fma_multi #(
   parameter fpnew_pkg::fmt_logic_t   FpFmtConfig = '1,
   parameter int unsigned             NumPipeRegs = 0,

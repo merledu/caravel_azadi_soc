@@ -79,11 +79,6 @@ module brq_cs_registers #(
 
     // CPU control bits
     output logic                data_ind_timing_o,
-    output logic                dummy_instr_en_o,
-    output logic [2:0]          dummy_instr_mask_o,
-    output logic                dummy_instr_seed_en_o,
-    output logic [31:0]         dummy_instr_seed_o,
-    output logic                icache_enable_o,
     output logic                csr_shadow_err_o,
 
     // Exception save/restore
@@ -119,6 +114,12 @@ module brq_cs_registers #(
 );
   import brq_pkg::*;
   import fpnew_pkg::roundmode_e;
+
+  logic                dummy_instr_en_o;
+  logic [2:0]          dummy_instr_mask_o;
+  logic                dummy_instr_seed_en_o;
+  logic [31:0]         dummy_instr_seed_o;
+  logic                icache_enable_o;
 
   localparam int unsigned RV32MEnabled = (RV32M == RV32MNone) ? 0 : 1;
   localparam int unsigned PMPAddrWidth = (PMPGranularity > 0) ? 33 - PMPGranularity : 32;
@@ -797,7 +798,23 @@ module brq_cs_registers #(
   ////////////////////////
   // CSR instantiations //
   ////////////////////////
-
+  logic unused_error1;
+  logic unused_error2;
+  logic unused_error3;
+  logic unused_error4;
+  logic unused_error5;
+  logic unused_error6;
+  logic unused_error7;
+  logic unused_error8;
+  logic unused_error9;
+  logic unused_error10;
+  logic unused_error11;
+  logic unused_error12;
+  logic unused_error13;
+  logic unused_error14;
+  logic unused_error15;
+  logic unused_error16;
+  logic unused_error17;
   // MSTATUS
   localparam status_t MSTATUS_RST_VAL = '{mie:  1'b0,
                                           mpie: 1'b1,
@@ -829,7 +846,7 @@ module brq_cs_registers #(
     .wr_data_i  (fflag_wdata),
     .wr_en_i    (fflags_en | is_fp_instr_i),
     .rd_data_o  (fflags_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error1)
   );
 
   // FRM
@@ -843,7 +860,7 @@ module brq_cs_registers #(
     .wr_data_i  (frm_d),
     .wr_en_i    (frm_en),
     .rd_data_o  (frm_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error2)
   );
   
   // MEPC
@@ -857,7 +874,7 @@ module brq_cs_registers #(
     .wr_data_i  (mepc_d),
     .wr_en_i    (mepc_en),
     .rd_data_o  (mepc_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error3)
   );
 
   // MIE
@@ -875,7 +892,7 @@ module brq_cs_registers #(
     .wr_data_i  ({mie_d}),
     .wr_en_i    (mie_en),
     .rd_data_o  (mie_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error4)
   );
 
   // MSCRATCH
@@ -889,7 +906,7 @@ module brq_cs_registers #(
     .wr_data_i  (csr_wdata_int),
     .wr_en_i    (mscratch_en),
     .rd_data_o  (mscratch_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error5)
   );
 
   // MCAUSE
@@ -903,7 +920,7 @@ module brq_cs_registers #(
     .wr_data_i  (mcause_d),
     .wr_en_i    (mcause_en),
     .rd_data_o  (mcause_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error6)
   );
 
   // MTVAL
@@ -917,7 +934,7 @@ module brq_cs_registers #(
     .wr_data_i  (mtval_d),
     .wr_en_i    (mtval_en),
     .rd_data_o  (mtval_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error7)
   );
 
   // MTVEC
@@ -951,7 +968,7 @@ module brq_cs_registers #(
     .wr_data_i  ({dcsr_d}),
     .wr_en_i    (dcsr_en),
     .rd_data_o  (dcsr_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error8)
   );
 
   // DEPC
@@ -965,7 +982,7 @@ module brq_cs_registers #(
     .wr_data_i  (depc_d),
     .wr_en_i    (depc_en),
     .rd_data_o  (depc_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error9)
   );
 
   // DSCRATCH0
@@ -979,7 +996,7 @@ module brq_cs_registers #(
     .wr_data_i  (csr_wdata_int),
     .wr_en_i    (dscratch0_en),
     .rd_data_o  (dscratch0_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error10)
   );
 
   // DSCRATCH1
@@ -993,7 +1010,7 @@ module brq_cs_registers #(
     .wr_data_i  (csr_wdata_int),
     .wr_en_i    (dscratch1_en),
     .rd_data_o  (dscratch1_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error11)
   );
 
   // MSTACK
@@ -1011,7 +1028,7 @@ module brq_cs_registers #(
     .wr_data_i  ({mstack_d}),
     .wr_en_i    (mstack_en),
     .rd_data_o  (mstack_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error12)
   );
 
   // MSTACK_EPC
@@ -1025,7 +1042,7 @@ module brq_cs_registers #(
     .wr_data_i  (mstack_epc_d),
     .wr_en_i    (mstack_en),
     .rd_data_o  (mstack_epc_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error13)
   );
 
   // MSTACK_CAUSE
@@ -1039,7 +1056,7 @@ module brq_cs_registers #(
     .wr_data_i  (mstack_cause_d),
     .wr_en_i    (mstack_en),
     .rd_data_o  (mstack_cause_q),
-    .rd_error_o ()
+    .rd_error_o (unused_error14)
   );
 
   // -----------------
@@ -1357,7 +1374,7 @@ module brq_cs_registers #(
       .wr_data_i  (tselect_d),
       .wr_en_i    (tselect_we),
       .rd_data_o  (tselect_q),
-      .rd_error_o ()
+      .rd_error_o (unused_error15)
     );
 
     for (genvar i = 0; i < DbgHwBreakNum; i++) begin : g_dbg_tmatch_reg
@@ -1371,7 +1388,7 @@ module brq_cs_registers #(
         .wr_data_i  (tmatch_control_d),
         .wr_en_i    (tmatch_control_we[i]),
         .rd_data_o  (tmatch_control_q[i]),
-        .rd_error_o ()
+        .rd_error_o (unused_error16)
     );
 
       brq_csr #(
@@ -1384,7 +1401,7 @@ module brq_cs_registers #(
         .wr_data_i  (tmatch_value_d),
         .wr_en_i    (tmatch_value_we[i]),
         .rd_data_o  (tmatch_value_q[i]),
-        .rd_error_o ()
+        .rd_error_o (unused_error7)
       );
     end
 

@@ -25,7 +25,7 @@ module brq_idu_controller #(
     input  logic [31:0]           instr_i,                 // uncompressed instr data for mtval
     input  logic [15:0]           instr_compressed_i,      // instr compressed data for mtval
     input  logic                  instr_is_compressed_i,   // instr is compressed
-    input  logic                  instr_bp_taken_i,        // instr was predicted taken branch
+    // input  logic                  instr_bp_taken_i,        // instr was predicted taken branch
     input  logic                  instr_fetch_err_i,       // instr has error
     input  logic                  instr_fetch_err_plus2_i, // instr error is x32
     input  logic [31:0]           pc_id_i,                 // instr address
@@ -42,7 +42,7 @@ module brq_idu_controller #(
     output logic                  pc_set_spec_o,           // speculative branch
     output brq_pkg::pc_sel_e      pc_mux_o,                // IF stage fetch address selector
                                                            // (boot, normal, exception...)
-    output logic                  nt_branch_mispredict_o,  // Not-taken branch in ID/EX was
+   // output logic                  nt_branch_mispredict_o,  // Not-taken branch in ID/EX was
                                                            // mispredicted (predicted taken)
     output brq_pkg::exc_pc_sel_e exc_pc_mux_o,            // IF stage selector for exception PC
     output brq_pkg::exc_cause_e  exc_cause_o,             // for IF stage, CSRs
@@ -58,7 +58,7 @@ module brq_idu_controller #(
                                                            // taken)
     input  logic                  branch_set_spec_i,       // speculative branch signal (branch
                                                            // may be taken)
-    input  logic                  branch_not_set_i,        // branch is definitely not taken
+  //  input  logic                  branch_not_set_i,        // branch is definitely not taken
     input  logic                  jump_set_i,              // jump taken set signal
 
     // interrupt signals
@@ -78,7 +78,7 @@ module brq_idu_controller #(
     input  logic                  debug_ebreakm_i,
     input  logic                  debug_ebreaku_i,
     input  logic                  trigger_match_i,
-
+// input  logic                  instr_bp_taken_i,
     output logic                  csr_save_if_o,
     output logic                  csr_save_id_o,
     output logic                  csr_save_wb_o,
@@ -103,7 +103,8 @@ module brq_idu_controller #(
     input  logic                  fpu_busy_i
 );
   import brq_pkg::*;
-
+  logic         instr_bp_taken_i;
+  assign        instr_bp_taken_i = '0;
   // FSM state encoding
   typedef enum logic [3:0] {
     RESET, BOOT_SET, WAIT_SLEEP, SLEEP, FIRST_FETCH, DECODE, FLUSH,
@@ -357,7 +358,7 @@ module brq_idu_controller #(
     pc_mux_o               = PC_BOOT;
     pc_set_o               = 1'b0;
     pc_set_spec_o          = 1'b0;
-    nt_branch_mispredict_o = 1'b0;
+    //nt_branch_mispredict_o = 1'b0;
 
     exc_pc_mux_o           = EXC_PC_IRQ;
     exc_cause_o            = EXC_CAUSE_INSN_ADDR_MISA; // = 6'h00
@@ -491,20 +492,20 @@ module brq_idu_controller #(
             perf_jump_o    = jump_set_i;
           end
 
-          if (BranchPredictor) begin
-            if (instr_bp_taken_i & branch_not_set_i) begin
-              // If the instruction is a branch that was predicted to be taken but was not taken
-              // signal a mispredict.
-              nt_branch_mispredict_o = 1'b1;
-            end
-          end
+          // if (BranchPredictor) begin
+          //   if (instr_bp_taken_i & branch_not_set_i) begin
+          //     // If the instruction is a branch that was predicted to be taken but was not taken
+          //     // signal a mispredict.
+          //     nt_branch_mispredict_o = 1'b1;
+          //   end
+          // end
         end
 
         // pc_set signal excluding branch taken condition
         if ((branch_set_spec_i || jump_set_i) && !special_req_branch) begin
           // Only speculatively set the PC if the branch predictor hasn't already done the branch
           // for us
-          pc_set_spec_o = BranchPredictor ? ~instr_bp_taken_i : 1'b1;
+          pc_set_spec_o = /*BranchPredictor ? ~instr_bp_taken_i : */1'b1;
         end
 
         // If entering debug mode or handling an IRQ the core needs to wait
@@ -560,7 +561,7 @@ module brq_idu_controller #(
             exc_cause_o = EXC_CAUSE_IRQ_EXTERNAL_M;
           end else if (irqs_i.irq_software) begin
             exc_cause_o = EXC_CAUSE_IRQ_SOFTWARE_M;
-          end else begin // irqs_i.irq_timer
+          end else if (irqs_i.irq_timer)begin // irqs_i.irq_timer
             exc_cause_o = EXC_CAUSE_IRQ_TIMER_M;
           end
         end

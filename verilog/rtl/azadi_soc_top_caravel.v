@@ -108,12 +108,12 @@ module azadi_soc_top_caravel (
   assign io_out[4]     =  sclk_o;
 
   // UART 
-  assign io_oeb[5]     =  1'b0;
-  assign io_out[5]     =  uart_tx;
-  
-  assign io_oeb[6]     =  1'b1;
-  assign uart_rx       =  io_in[6];
-  
+  assign io_oeb[5]     =  1'b1;
+  assign uart_rx       =  io_in[5];
+
+  assign io_oeb[6]     =  1'b0;
+  assign io_out[6]     =  uart_tx;
+    
   // Programming Button 
   assign io_oeb[7]     =  1'b1;
   assign prog          =  io_in[7];

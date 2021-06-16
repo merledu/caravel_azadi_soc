@@ -109,6 +109,7 @@ module azadi_soc_top_caravel (
 
   // UART 
   assign io_oeb[5]     =  1'b1;
+  assign io_out[2]     =  1'b0;
   assign uart_rx       =  io_in[5];
 
   assign io_oeb[6]     =  1'b0;
@@ -116,6 +117,7 @@ module azadi_soc_top_caravel (
     
   // Programming Button 
   assign io_oeb[7]     =  1'b1;
+  assign io_out[2]     =  1'b0;
   assign prog          =  io_in[7];
 
   // GPIO 0-18
@@ -167,7 +169,6 @@ module azadi_soc_top_caravel (
   assign io_out[37:35]  =  gpio_o [29:27];
 
   // Logic Analyzer ports
-  assign la_oenb[15:0] = 16'hffff;
   assign clks_per_bit  = la_data_in[15:0];
 
   azadi_soc_top soc_top(

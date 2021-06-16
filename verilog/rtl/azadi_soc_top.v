@@ -1,5 +1,6 @@
-`default_nettype wire
+/*azadi_soc_top_conv-v0.6*/
 
+`default_nettype wire
 module azadi_soc_top (
 	`ifdef USE_POWER_PINS
     inout VPWR,	// User area 1 1.8V supply
@@ -12,12 +13,6 @@ module azadi_soc_top (
 	gpio_i,
 	gpio_o,
 	gpio_oe,
-	jtag_tck_i,
-	jtag_tms_i,
-	jtag_trst_ni,
-	jtag_tdi_i,
-	jtag_tdo_o,
-	jtag_tdo_oe_o,
 	uart_tx,
 	uart_rx,
 	pwm_o,
@@ -37,12 +32,6 @@ module azadi_soc_top (
 	input wire [31:0] gpio_i;
 	output wire [31:0] gpio_o;
 	output wire [31:0] gpio_oe;
-	input wire jtag_tck_i;
-	input wire jtag_tms_i;
-	input wire jtag_trst_ni;
-	input wire jtag_tdi_i;
-	output wire jtag_tdo_o;
-	output wire jtag_tdo_oe_o;
 	output wire uart_tx;
 	input wire uart_rx;
 	output wire pwm_o;
@@ -54,7 +43,6 @@ module azadi_soc_top (
 	output wire sd_o;
 	output wire sd_oe;
 	input wire sd_i;
-	localparam [31:0] JTAG_ID = 32'b00000100111101010100100001001101;
 	wire prog_rst_n;
 	wire system_rst_ni;
 	wire [31:0] gpio_in;
@@ -65,8 +53,6 @@ module azadi_soc_top (
 	wire [11:0] tlul_addr;
 	wire req_i;
 	wire [31:0] tlul_data;
-	wire dbg_req;
-	wire dbg_rst;
 	wire instr_csb;
 	wire [11:0] instr_addr;
 	wire [31:0] instr_wdata;
@@ -98,10 +84,6 @@ module azadi_soc_top (
 	wire [51:0] dccm_to_xbar;
 	wire [85:0] xbarp_to_gpio;
 	wire [51:0] gpio_to_xbarp;
-	wire [85:0] dm_to_xbar;
-	wire [51:0] xbar_to_dm;
-	wire [85:0] dbgrom_to_xbar;
-	wire [51:0] xbar_to_dbgrom;
 	wire [85:0] plic_req;
 	wire [51:0] plic_resp;
 	wire [85:0] xbar_to_uart;
@@ -128,17 +110,6 @@ module azadi_soc_top (
 	wire intr_timer;
 	wire intr_u_tx;
 	assign intr_vector = {intr_srx, intr_stx, intr_u_tx, intr_gpio, 1'b0};
-	wire [3:0] jtag_req;
-	wire [1:0] jtag_rsp;
-	assign jtag_req[3] = jtag_tck_i;
-	assign jtag_req[2] = jtag_tms_i;
-	assign jtag_req[1] = jtag_trst_ni;
-	assign jtag_req[0] = jtag_tdi_i;
-	assign jtag_tdo_o = jtag_rsp[1];
-	assign jtag_tdo_oe_o = jtag_rsp[0];
-	localparam [63:0] dm_HaltAddress = 64'h0000000000000800;
-	localparam [63:0] dm_ExceptionAddress = dm_HaltAddress + 8;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_DEBUG_ROM = 32'h10040000;
 	localparam integer brq_pkg_RV32BNone = 0;
 	localparam integer brq_pkg_RV32MSlow = 1;
 	localparam integer brq_pkg_RegFileFF = 0;
@@ -160,8 +131,8 @@ module azadi_soc_top (
 		.DbgTriggerEn(1'b1),
 		.DbgHwBreakNum(1),
 		.Securebrq(1'b0),
-		.DmHaltAddr(tl_main_pkg_ADDR_SPACE_DEBUG_ROM + 32'h00000800),
-		.DmExceptionAddr(tl_main_pkg_ADDR_SPACE_DEBUG_ROM + dm_ExceptionAddress)
+		.DmHaltAddr(1'sb0),
+		.DmExceptionAddr(1'sb0)
 	) u_top(
 		.clk_i(clk_i),
 		.rst_ni(system_rst_ni),
@@ -176,29 +147,11 @@ module azadi_soc_top (
 		.irq_external_i(intr_req),
 		.irq_fast_i({15 {1'sb0}}),
 		.irq_nm_i(1'b0),
-		.debug_req_i(dbg_req),
+		.debug_req_i(1'b0),
 		.fetch_enable_i(1'b1),
 		.alert_minor_o(),
 		.alert_major_o(),
 		.core_sleep_o()
-	);
-	rv_dm #(
-		.NrHarts(1),
-		.IdcodeValue(JTAG_ID)
-	) debug_module(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.testmode_i(1'b0),
-		.ndmreset_o(dbg_rst),
-		.dmactive_o(),
-		.debug_req_o(dbg_req),
-		.unavailable_i(1'b0),
-		.tl_d_i(dbgrom_to_xbar),
-		.tl_d_o(xbar_to_dbgrom),
-		.tl_h_o(dm_to_xbar),
-		.tl_h_i(xbar_to_dm),
-		.jtag_req_i(jtag_req),
-		.jtag_rsp_o(jtag_rsp)
 	);
 	tl_xbar_main main_swith(
 		.clk_i(clk_i),
@@ -207,12 +160,8 @@ module azadi_soc_top (
 		.tl_brqif_o(xbar_to_ifu),
 		.tl_brqlsu_i(lsu_to_xbar),
 		.tl_brqlsu_o(xbar_to_lsu),
-		.tl_dm_sba_i(dm_to_xbar),
-		.tl_dm_sba_o(xbar_to_dm),
 		.tl_iccm_o(xbar_to_iccm),
 		.tl_iccm_i(iccm_to_xbar),
-		.tl_debug_rom_o(dbgrom_to_xbar),
-		.tl_debug_rom_i(xbar_to_dbgrom),
 		.tl_dccm_o(xbar_to_dccm),
 		.tl_dccm_i(dccm_to_xbar),
 		.tl_timer0_o(xbar_to_timer),
@@ -272,7 +221,6 @@ module azadi_soc_top (
 	rstmgr reset_manager(
 		.clk_i(clk_i),
 		.rst_ni(rst_ni),
-		.ndmreset(dbg_rst),
 		.prog_rst_ni(prog_rst_ni),
 		.sys_rst_ni(system_rst_ni)
 	);
@@ -296,7 +244,7 @@ module azadi_soc_top (
 	);
 	wire rx_dv_i;
 	wire [7:0] rx_byte_i;
-	iccm_controller u_dut(
+	iccm_controller iccm_controller(
 		.clk_i(clk_i),
 		.rst_ni(rst_ni),
 		.prog_i(prog),
@@ -331,8 +279,7 @@ module azadi_soc_top (
 		.we_o(instr_we),
 		.rdata_i(instr_rdata)
 	);
-	wire [31:0] unused_data1;
-	wire [31:0] unused_data2;
+	wire [31:0] un_conn1;
 	sky130_sram_4kbyte_1rw1r_32x1024_8 u_iccm(
 		`ifdef USE_POWER_PINS
   	  .vccd1(VPWR),	
@@ -347,8 +294,8 @@ module azadi_soc_top (
 		.dout0(instr_rdata),
 		.clk1(1'b0),
 		.csb1(1'b1),
-		.addr1(10'b0000000000),
-		.dout1(unused_data1)
+		.addr1({10 {1'sb0}}),
+		.dout1(un_conn1)
 	);
 	data_mem_top dccm_adapter(
 		.clk_i(clk_i),
@@ -362,13 +309,14 @@ module azadi_soc_top (
 		.we_o(data_we),
 		.rdata_i(data_rdata)
 	);
+	wire [31:0] un_conn2;
 	sky130_sram_4kbyte_1rw1r_32x1024_8 u_dccm(
 		`ifdef USE_POWER_PINS
   	  .vccd1(VPWR),	
-			.vssd1(VGND),	
+  	  .vssd1(VGND),	
   	`endif
 		.clk0(clk_i),
-		.csb0(data_csb),
+		.csb0(instr_csb),
 		.web0(data_we),
 		.wmask0(data_wmask),
 		.addr0(data_addr[9:0]),
@@ -376,8 +324,8 @@ module azadi_soc_top (
 		.dout0(data_rdata),
 		.clk1(1'b0),
 		.csb1(1'b1),
-		.addr1(10'b0000000000),
-		.dout1(unused_data2)
+		.addr1({10 {1'sb0}}),
+		.dout1(un_conn2)
 	);
 endmodule
 module brq_core (
@@ -413,7 +361,7 @@ module brq_core (
 );
 	parameter [0:0] PMPEnable = 1'b0;
 	parameter [31:0] PMPGranularity = 0;
-	parameter [31:0] PMPNumRegions = 0;
+	parameter [31:0] PMPNumRegions = 4;
 	parameter [31:0] MHPMCounterNum = 0;
 	parameter [31:0] MHPMCounterWidth = 40;
 	parameter [0:0] RV32E = 1'b0;
@@ -509,10 +457,10 @@ module brq_core (
 	wire [2:0] fp_frm_csr;
 	wire [2:0] fp_frm_fpnew;
 	wire [3:0] fp_alu_operator;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_src_fmt;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_dst_fmt;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	wire [1:0] fp_src_fmt;
+	wire [1:0] fp_dst_fmt;
 	localparam [31:0] PMP_NUM_CHAN = 2;
 	localparam [0:0] DataIndTiming = Securebrq;
 	localparam [0:0] DummyInstructions = Securebrq;
@@ -686,7 +634,7 @@ module brq_core (
 	assign core_sleep_o = ~clock_en;
 	prim_clock_gating core_clock_gate_i(
 		.clk_i(clk_i),
-		.en_i(clock_en),
+		.en_i(1'b1),
 		.test_en_i(test_en_i),
 		.clk_o(clk)
 	);
@@ -747,8 +695,7 @@ module brq_core (
 		.DataIndTiming(DataIndTiming),
 		.SpecBranch(SpecBranch),
 		.WritebackStage(WritebackStage),
-		.BranchPredictor(BranchPredictor),
-		.FloatingPoint(FloatingPoint)
+		.BranchPredictor(BranchPredictor)
 	) id_stage_i(
 		.clk_i(clk),
 		.rst_ni(rst_ni),
@@ -1211,27 +1158,27 @@ module brq_core (
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	localparam [1:0] fpnew_pkg_MERGED = 2;
 	localparam [1:0] fpnew_pkg_PARALLEL = 1;
-	function automatic [31:0] sv2v_cast_CC116;
-		input reg [31:0] inp;
+	function automatic [127:0] sv2v_cast_CC116;
+		input reg [127:0] inp;
 		sv2v_cast_CC116 = inp;
 	endfunction
-	function automatic [127:0] sv2v_cast_128;
-		input reg [127:0] inp;
-		sv2v_cast_128 = inp;
+	function automatic [511:0] sv2v_cast_512;
+		input reg [511:0] inp;
+		sv2v_cast_512 = inp;
 	endfunction
-	function automatic [7:0] sv2v_cast_8;
-		input reg [7:0] inp;
-		sv2v_cast_8 = inp;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
 	endfunction
-	localparam [137:0] fpnew_pkg_DEFAULT_NOREGS = {sv2v_cast_128({fpnew_pkg_NUM_OPGROUPS {sv2v_cast_CC116(0)}}), sv2v_cast_8({{fpnew_pkg_PARALLEL}, {fpnew_pkg_MERGED}, {fpnew_pkg_PARALLEL}, {fpnew_pkg_MERGED}}), fpnew_pkg_BEFORE};
-	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 0;
-	function automatic [0:0] sv2v_cast_1;
-		input reg [0:0] inp;
-		sv2v_cast_1 = inp;
+	localparam [545:0] fpnew_pkg_DEFAULT_NOREGS = {sv2v_cast_512({fpnew_pkg_NUM_OPGROUPS {sv2v_cast_CC116(0)}}), sv2v_cast_32({{fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_MERGED}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_MERGED}}}), fpnew_pkg_BEFORE};
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	function automatic [3:0] sv2v_cast_4;
+		input reg [3:0] inp;
+		sv2v_cast_4 = inp;
 	endfunction
-	localparam [35:0] fpnew_pkg_RV32F = {34'b0000000000000000000000000010000001, sv2v_cast_1(5'b10000), sv2v_cast_1(4'b0010)};
-	localparam [fpnew_pkg_INT_FORMAT_BITS - 1:0] fpnew_pkg_INT32 = 0;
+	localparam [41:0] fpnew_pkg_RV32F = {34'b0000000000000000000000000010000001, sv2v_cast_4(5'b10000), 4'b0010};
+	localparam [1:0] fpnew_pkg_INT32 = 2;
 	fpnew_top_F1920 #(
 		.Features(fpnew_pkg_RV32F),
 		.Implementation(fpnew_pkg_DEFAULT_NOREGS)
@@ -1246,7 +1193,7 @@ module brq_core (
 		.dst_fmt_i(fp_dst_fmt),
 		.int_fmt_i(fpnew_pkg_INT32),
 		.vectorial_op_i(1'b0),
-		.tag_i(),
+		.tag_i(1'b1),
 		.in_valid_i(in_valid_c2fpu),
 		.in_ready_o(out_ready_fpu2c),
 		.flush_i(fp_flush),
@@ -1328,7 +1275,7 @@ module brq_core_top (
 );
 	parameter [0:0] PMPEnable = 1'b0;
 	parameter [31:0] PMPGranularity = 0;
-	parameter [31:0] PMPNumRegions = 0;
+	parameter [31:0] PMPNumRegions = 4;
 	parameter [31:0] MHPMCounterNum = 0;
 	parameter [31:0] MHPMCounterWidth = 40;
 	parameter [0:0] RV32E = 1'b0;
@@ -1438,7 +1385,7 @@ module brq_core_top (
 		.alert_major_o(alert_major_o),
 		.core_sleep_o(core_sleep_o)
 	);
-	tlul_host_adapter #(.MAX_REQS(2)) intr_interface(
+	tlul_host_adapter #(.MAX_REQS(2)) instr_interface(
 		.clk_i(clk_i),
 		.rst_ni(rst_ni),
 		.req_i(instr_req),
@@ -1469,6 +1416,204 @@ module brq_core_top (
 		.tl_h_c_d(tl_d_i)
 	);
 endmodule
+module rstmgr (
+	clk_i,
+	rst_ni,
+	prog_rst_ni,
+	ndmreset,
+	sys_rst_ni
+);
+	input clk_i;
+	input rst_ni;
+	input prog_rst_ni;
+	input wire ndmreset;
+	output reg sys_rst_ni;
+	reg [1:0] rst_fsm_cs;
+	reg [1:0] rst_fsm_ns;
+	reg rst_run_d;
+	reg rst_run_q;
+	localparam [1:0] IDLE = 1;
+	localparam [1:0] PROG = 2;
+	localparam [1:0] RESET = 0;
+	localparam [1:0] RUN = 3;
+	always @(*) begin : comb_part
+		rst_fsm_ns = rst_fsm_cs;
+		sys_rst_ni = 1'b0;
+		case (rst_fsm_cs)
+			RESET: begin
+				sys_rst_ni = 1'b0;
+				rst_fsm_ns = IDLE;
+			end
+			IDLE: begin
+				sys_rst_ni = 1'b0;
+				rst_run_d = 1'b0;
+				if (rst_run_q)
+					rst_fsm_ns = RUN;
+				else if (!prog_rst_ni)
+					rst_fsm_ns = PROG;
+				else
+					rst_fsm_ns = IDLE;
+			end
+			PROG: begin
+				sys_rst_ni = 1'b0;
+				rst_run_d = 1'b0;
+				if (!prog_rst_ni)
+					rst_fsm_ns = PROG;
+				else
+					rst_fsm_ns = RUN;
+			end
+			RUN: begin
+				sys_rst_ni = 1'b1;
+				rst_run_d = 1'b0;
+				if (!rst_ni) begin
+					rst_run_d = 1'b1;
+					rst_fsm_ns = RESET;
+				end
+				else if (!prog_rst_ni)
+					rst_fsm_ns = PROG;
+				else
+					rst_fsm_ns = RUN;
+			end
+			default: begin
+				rst_fsm_ns = rst_fsm_cs;
+				sys_rst_ni = 1'b0;
+				rst_run_d = 1'b0;
+			end
+		endcase
+	end
+	always @(posedge clk_i or negedge rst_ni) begin : seq_part
+		if (!rst_ni) begin
+			rst_fsm_cs <= RESET;
+			rst_run_q <= 1'b0;
+		end
+		else begin
+			rst_fsm_cs <= rst_fsm_ns;
+			rst_run_q <= rst_run_d;
+		end
+	end
+endmodule
+module tl_xbar_main (
+	clk_i,
+	rst_ni,
+	tl_brqif_i,
+	tl_brqif_o,
+	tl_brqlsu_i,
+	tl_brqlsu_o,
+	tl_iccm_o,
+	tl_iccm_i,
+	tl_dccm_o,
+	tl_dccm_i,
+	tl_timer0_o,
+	tl_timer0_i,
+	tl_uart_o,
+	tl_uart_i,
+	tl_spi_o,
+	tl_spi_i,
+	tl_pwm_o,
+	tl_pwm_i,
+	tl_gpio_o,
+	tl_gpio_i,
+	tl_plic_o,
+	tl_plic_i
+);
+	input wire clk_i;
+	input wire rst_ni;
+	localparam signed [31:0] tlul_pkg_TL_AIW = 8;
+	localparam signed [31:0] tlul_pkg_TL_AW = 32;
+	localparam signed [31:0] tlul_pkg_TL_DW = 32;
+	localparam signed [31:0] tlul_pkg_TL_DBW = 4;
+	localparam signed [31:0] tlul_pkg_TL_SZW = 2;
+	input wire [85:0] tl_brqif_i;
+	localparam signed [31:0] tlul_pkg_TL_DIW = 1;
+	output wire [51:0] tl_brqif_o;
+	input wire [85:0] tl_brqlsu_i;
+	output wire [51:0] tl_brqlsu_o;
+	output wire [85:0] tl_iccm_o;
+	input wire [51:0] tl_iccm_i;
+	output wire [85:0] tl_dccm_o;
+	input wire [51:0] tl_dccm_i;
+	output wire [85:0] tl_timer0_o;
+	input wire [51:0] tl_timer0_i;
+	output wire [85:0] tl_uart_o;
+	input wire [51:0] tl_uart_i;
+	output wire [85:0] tl_spi_o;
+	input wire [51:0] tl_spi_i;
+	output wire [85:0] tl_pwm_o;
+	input wire [51:0] tl_pwm_i;
+	output wire [85:0] tl_gpio_o;
+	input wire [51:0] tl_gpio_i;
+	output wire [85:0] tl_plic_o;
+	input wire [51:0] tl_plic_i;
+	wire [85:0] brqlsu_to_s1n;
+	wire [51:0] s1n_to_brqlsu;
+	reg [3:0] device_sel;
+	wire [601:0] h_dv_o;
+	wire [363:0] h_dv_i;
+	assign brqlsu_to_s1n = tl_brqlsu_i;
+	assign tl_brqlsu_o = s1n_to_brqlsu;
+	assign tl_iccm_o = tl_brqif_i;
+	assign tl_brqif_o = tl_iccm_i;
+	assign tl_dccm_o = h_dv_o[516+:86];
+	assign h_dv_i[312+:52] = tl_dccm_i;
+	assign tl_timer0_o = h_dv_o[430+:86];
+	assign h_dv_i[260+:52] = tl_timer0_i;
+	assign tl_uart_o = h_dv_o[344+:86];
+	assign h_dv_i[208+:52] = tl_uart_i;
+	assign tl_spi_o = h_dv_o[258+:86];
+	assign h_dv_i[156+:52] = tl_spi_i;
+	assign tl_pwm_o = h_dv_o[172+:86];
+	assign h_dv_i[104+:52] = tl_pwm_i;
+	assign tl_gpio_o = h_dv_o[86+:86];
+	assign h_dv_i[52+:52] = tl_gpio_i;
+	assign tl_plic_o = h_dv_o[0+:86];
+	assign h_dv_i[0+:52] = tl_plic_i;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_DCCM = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_GPIO = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_PLIC = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_PWM = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_SPI0 = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_TIMER0 = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_MASK_UART0 = 32'h0000ffff;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_DCCM = 32'h10000000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_GPIO = 32'h400c0000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_PLIC = 32'h40050000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_PWM = 32'h400b0000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_SPI0 = 32'h40080000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_TIMER0 = 32'h40000000;
+	localparam [31:0] tl_main_pkg_ADDR_SPACE_UART0 = 32'h40060000;
+	always @(*) begin
+		device_sel = 4'd9;
+		if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_DCCM) == tl_main_pkg_ADDR_SPACE_DCCM)
+			device_sel = 4'd0;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_TIMER0) == tl_main_pkg_ADDR_SPACE_TIMER0)
+			device_sel = 4'd1;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_UART0) == tl_main_pkg_ADDR_SPACE_UART0)
+			device_sel = 4'd2;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_SPI0) == tl_main_pkg_ADDR_SPACE_SPI0)
+			device_sel = 4'd3;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PWM) == tl_main_pkg_ADDR_SPACE_PWM)
+			device_sel = 4'd4;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_GPIO) == tl_main_pkg_ADDR_SPACE_GPIO)
+			device_sel = 4'd5;
+		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PLIC) == tl_main_pkg_ADDR_SPACE_PLIC)
+			device_sel = 4'd6;
+	end
+	tlul_socket_1n #(
+		.HReqDepth(4'h0),
+		.HRspDepth(4'h0),
+		.DReqDepth(36'h000000000),
+		.DRspDepth(36'h000000000),
+		.N(7)
+	) host_lsu(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.tl_h_i(brqlsu_to_s1n),
+		.tl_h_o(s1n_to_brqlsu),
+		.tl_d_o(h_dv_o),
+		.tl_d_i(h_dv_i),
+		.dev_select_i(device_sel)
+	);
+endmodule
 module brq_counter (
 	clk_i,
 	rst_ni,
@@ -1491,7 +1636,6 @@ module brq_counter (
 	reg [63:0] counter_load;
 	reg we;
 	reg [CounterWidth - 1:0] counter_d;
-	reg [CounterWidth - 1:0] counter_q;
 	always @(*) begin
 		we = counter_we_i | counterh_we_i;
 		counter_load[63:32] = counter[63:32];
@@ -1508,9 +1652,10 @@ module brq_counter (
 		else
 			counter_d = counter[CounterWidth - 1:0];
 	end
+	reg [CounterWidth - 1:0] counter_q;
 	always @(posedge clk_i or negedge rst_ni)
 		if (!rst_ni)
-			counter_q <= 0;
+			counter_q <= {CounterWidth {1'sb0}};
 		else
 			counter_q <= counter_d;
 	generate
@@ -2354,7 +2499,7 @@ module brq_cs_registers (
 	brq_csr #(
 		.Width(32),
 		.ShadowCopy(ShadowCSR),
-		.ResetValue(32'd1)
+		.ResetValue(32'd0)
 	) u_mtvec_csr(
 		.clk_i(clk_i),
 		.rst_ni(rst_ni),
@@ -2579,7 +2724,7 @@ module brq_cs_registers (
 			mcountinhibit_d = mcountinhibit_q;
 	end
 	always @(*) begin : gen_mhpmcounter_incr
-		begin : sv2v_autoblock_81
+		begin : sv2v_autoblock_83
 			reg [31:0] i;
 			for (i = 0; i < 32; i = i + 1)
 				begin : gen_mhpmcounter_incr_inactive
@@ -2601,7 +2746,7 @@ module brq_cs_registers (
 		mhpmcounter_incr[12] = div_wait_i;
 	end
 	always @(*) begin : gen_mhpmevent
-		begin : sv2v_autoblock_82
+		begin : sv2v_autoblock_84
 			reg signed [31:0] i;
 			for (i = 0; i < 32; i = i + 1)
 				begin : gen_mhpmevent_active
@@ -2610,7 +2755,7 @@ module brq_cs_registers (
 				end
 		end
 		mhpmevent[1] = {32 {1'sb0}};
-		begin : sv2v_autoblock_83
+		begin : sv2v_autoblock_85
 			reg [31:0] i;
 			for (i = 3 + MHPMCounterNum; i < 32; i = i + 1)
 				begin : gen_mhpmevent_inactive
@@ -3032,7 +3177,7 @@ module brq_exu_alu (
 		shift_result_ext = $unsigned($signed({shift_ones | (shift_arith & shift_operand[31]), shift_operand}) >>> shift_amt[4:0]);
 		shift_result = shift_result_ext[31:0];
 		unused_shift_result_ext = shift_result_ext[32];
-		begin : sv2v_autoblock_84
+		begin : sv2v_autoblock_86
 			reg [31:0] i;
 			for (i = 0; i < 32; i = i + 1)
 				shift_result_rev[i] = shift_result[31 - i];
@@ -3136,40 +3281,40 @@ module brq_exu_alu (
 				endcase
 			always @(*) begin
 				bitcnt_partial = {32 {6'b000000}};
-				begin : sv2v_autoblock_85
+				begin : sv2v_autoblock_87
 					reg [31:0] i;
 					for (i = 1; i < 32; i = i + 2)
 						bitcnt_partial[(31 - i) * 6+:6] = {5'h00, bitcnt_bits[i]} + {5'h00, bitcnt_bits[i - 1]};
 				end
-				begin : sv2v_autoblock_86
+				begin : sv2v_autoblock_88
 					reg [31:0] i;
 					for (i = 3; i < 32; i = i + 4)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(33 - i) * 6+:6] + bitcnt_partial[(31 - i) * 6+:6];
 				end
-				begin : sv2v_autoblock_87
+				begin : sv2v_autoblock_89
 					reg [31:0] i;
 					for (i = 7; i < 32; i = i + 8)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(35 - i) * 6+:6] + bitcnt_partial[(31 - i) * 6+:6];
 				end
-				begin : sv2v_autoblock_88
+				begin : sv2v_autoblock_90
 					reg [31:0] i;
 					for (i = 15; i < 32; i = i + 16)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(39 - i) * 6+:6] + bitcnt_partial[(31 - i) * 6+:6];
 				end
 				bitcnt_partial[0+:6] = bitcnt_partial[96+:6] + bitcnt_partial[0+:6];
 				bitcnt_partial[48+:6] = bitcnt_partial[96+:6] + bitcnt_partial[48+:6];
-				begin : sv2v_autoblock_89
+				begin : sv2v_autoblock_91
 					reg [31:0] i;
 					for (i = 11; i < 32; i = i + 8)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(35 - i) * 6+:6] + bitcnt_partial[(31 - i) * 6+:6];
 				end
-				begin : sv2v_autoblock_90
+				begin : sv2v_autoblock_92
 					reg [31:0] i;
 					for (i = 5; i < 32; i = i + 4)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(33 - i) * 6+:6] + bitcnt_partial[(31 - i) * 6+:6];
 				end
 				bitcnt_partial[186+:6] = {5'h00, bitcnt_bits[0]};
-				begin : sv2v_autoblock_91
+				begin : sv2v_autoblock_93
 					reg [31:0] i;
 					for (i = 2; i < 32; i = i + 2)
 						bitcnt_partial[(31 - i) * 6+:6] = bitcnt_partial[(32 - i) * 6+:6] + {5'h00, bitcnt_bits[i]};
@@ -3270,35 +3415,35 @@ module brq_exu_alu (
 				assign bitcnt_partial_msb_d[31] = 1'b0;
 				always @(*) begin
 					bitcnt_partial_q = {32 {6'b000000}};
-					begin : sv2v_autoblock_92
+					begin : sv2v_autoblock_94
 						reg [31:0] i;
 						for (i = 0; i < 32; i = i + 1)
 							begin : gen_bitcnt_reg_out_lsb
 								bitcnt_partial_q[(31 - i) * 6] = imd_val_q_i[32 + i];
 							end
 					end
-					begin : sv2v_autoblock_93
+					begin : sv2v_autoblock_95
 						reg [31:0] i;
 						for (i = 0; i < 16; i = i + 1)
 							begin : gen_bitcnt_reg_out_b1
 								bitcnt_partial_q[((31 - ((2 * i) + 1)) * 6) + 1] = imd_val_q_i[i];
 							end
 					end
-					begin : sv2v_autoblock_94
+					begin : sv2v_autoblock_96
 						reg [31:0] i;
 						for (i = 0; i < 8; i = i + 1)
 							begin : gen_bitcnt_reg_out_b2
 								bitcnt_partial_q[((31 - ((4 * i) + 3)) * 6) + 2] = imd_val_q_i[16 + i];
 							end
 					end
-					begin : sv2v_autoblock_95
+					begin : sv2v_autoblock_97
 						reg [31:0] i;
 						for (i = 0; i < 4; i = i + 1)
 							begin : gen_bitcnt_reg_out_b3
 								bitcnt_partial_q[((31 - ((8 * i) + 7)) * 6) + 3] = imd_val_q_i[24 + i];
 							end
 					end
-					begin : sv2v_autoblock_96
+					begin : sv2v_autoblock_98
 						reg [31:0] i;
 						for (i = 0; i < 2; i = i + 1)
 							begin : gen_bitcnt_reg_out_b4
@@ -4465,7 +4610,7 @@ module brq_fp_register_file_ff (
 		sv2v_cast_5 = inp;
 	endfunction
 	always @(*) begin : we_a_decoder
-		begin : sv2v_autoblock_97
+		begin : sv2v_autoblock_99
 			reg [31:0] i;
 			for (i = 0; i < NUM_WORDS; i = i + 1)
 				we_a_dec[i] = (waddr_a_i == sv2v_cast_5(i) ? we_a_i : 1'b0);
@@ -4547,7 +4692,8 @@ module brq_idu_controller (
 	flush_id_o,
 	ready_wb_i,
 	perf_jump_o,
-	perf_tbranch_o
+	perf_tbranch_o,
+	fpu_busy_i
 );
 	parameter [0:0] WritebackStage = 0;
 	parameter [0:0] BranchPredictor = 0;
@@ -4612,6 +4758,7 @@ module brq_idu_controller (
 	input wire ready_wb_i;
 	output reg perf_jump_o;
 	output reg perf_tbranch_o;
+	input wire fpu_busy_i;
 	wire instr_bp_taken_i;
 	assign instr_bp_taken_i = 1'b0;
 	reg [3:0] ctrl_fsm_cs;
@@ -5032,7 +5179,7 @@ module brq_idu_controller (
 	assign flush_id_o = flush_id;
 	assign debug_mode_o = debug_mode_q;
 	assign nmi_mode_o = nmi_mode_q;
-	assign stall = stall_id_i | stall_wb_i;
+	assign stall = (stall_id_i | stall_wb_i) | fpu_busy_i;
 	assign id_in_ready_o = (~stall & ~halt_if) & ~retain_id;
 	assign instr_valid_clear_o = ~(stall | retain_id) | flush_id;
 	always @(posedge clk_i or negedge rst_ni) begin : update_regs
@@ -5195,10 +5342,10 @@ module brq_idu_decoder (
 	output reg [3:0] fp_alu_operator_o;
 	output reg fp_alu_op_mod_o;
 	output wire fp_rm_dynamic_o;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	output reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_src_fmt_o;
-	output reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_dst_fmt_o;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	output reg [1:0] fp_src_fmt_o;
+	output reg [1:0] fp_dst_fmt_o;
 	output reg is_fp_instr_o;
 	output reg use_fp_rs1_o;
 	output reg use_fp_rs2_o;
@@ -5223,7 +5370,7 @@ module brq_idu_decoder (
 	reg [1:0] csr_op;
 	reg [6:0] opcode;
 	reg [6:0] opcode_alu;
-	assign instr = instr_rdata_i;
+	assign instr = instr_rdata_alu_i;
 	assign instr_alu = instr_rdata_alu_i;
 	assign imm_i_type_o = {{20 {instr[31]}}, instr[31:20]};
 	assign imm_s_type_o = {{20 {instr[31]}}, instr[31:25], instr[11:7]};
@@ -5250,10 +5397,6 @@ module brq_idu_decoder (
 	assign fp_rounding_mode_o = instr[14:12];
 	assign fp_invalid_rm = (instr[14:12] == 3'b101 ? 1'b1 : (instr[14:12] == 3'b110 ? 1'b1 : 1'b0));
 	assign fp_rm_dynamic_o = (instr[14:12] == 3'b111 ? 1'b1 : 1'b0);
-	localparam [fpnew_pkg_FP_FORMAT_BITS - 1:0] fpnew_pkg_FP32 = 'd0;
-	wire [0:1] sv2v_tmp_24DB7;
-	assign sv2v_tmp_24DB7 = fpnew_pkg_FP32;
-	always @(*) fp_dst_fmt_o = sv2v_tmp_24DB7;
 	localparam [1:0] brq_pkg_OP_A_REG_A = 0;
 	localparam [0:0] brq_pkg_OP_B_REG_B = 0;
 	generate
@@ -5301,6 +5444,7 @@ module brq_idu_decoder (
 	localparam integer brq_pkg_RV32BFull = 2;
 	localparam integer brq_pkg_RV32FNone = 0;
 	localparam integer brq_pkg_RV32MNone = 0;
+	localparam [1:0] fpnew_pkg_FP32 = 'd0;
 	always @(*) begin
 		jump_in_dec_o = 1'b0;
 		jump_set_o = 1'b0;
@@ -5647,10 +5791,8 @@ module brq_idu_decoder (
 						use_fp_rs1_o = 1'b1;
 						use_fp_rs2_o = 1'b1;
 						use_fp_rd_o = 1'b1;
-						if (~(instr[14] | &instr[13:12])) begin
+						if (~(instr[14] | &instr[13:12]))
 							illegal_insn = ((RVF == brq_pkg_RV64FDouble) & fp_invalid_rm ? 1'b0 : 1'b1);
-							fp_src_fmt_o = FP64;
-						end
 					end
 					7'b0010000: begin
 						fp_rf_we_o = 1'b1;
@@ -6621,7 +6763,6 @@ module brq_idu (
 	parameter [0:0] SpecBranch = 0;
 	parameter [0:0] WritebackStage = 0;
 	parameter [0:0] BranchPredictor = 0;
-	parameter FloatingPoint = 1;
 	input wire clk_i;
 	input wire rst_ni;
 	output wire ctrl_busy_o;
@@ -6743,10 +6884,10 @@ module brq_idu (
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	output wire [3:0] fp_alu_operator_o;
 	output wire fp_alu_op_mod_o;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	output wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_src_fmt_o;
-	output wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] fp_dst_fmt_o;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	output wire [1:0] fp_src_fmt_o;
+	output wire [1:0] fp_dst_fmt_o;
 	output wire fp_rm_dynamic_o;
 	output wire fp_flush_o;
 	output wire is_fp_instr_o;
@@ -6787,7 +6928,6 @@ module brq_idu (
 	reg stall_jump;
 	wire stall_id;
 	wire stall_wb;
-	reg stall_fpu;
 	wire flush_id;
 	wire multicycle_done;
 	wire [31:0] imm_i_type;
@@ -7107,7 +7247,8 @@ module brq_idu (
 		.flush_id_o(flush_id),
 		.ready_wb_i(ready_wb_i),
 		.perf_jump_o(perf_jump_o),
-		.perf_tbranch_o(perf_tbranch_o)
+		.perf_tbranch_o(perf_tbranch_o),
+		.fpu_busy_i(fpu_busy_i)
 	);
 	assign fp_flush_o = flush_id;
 	assign multdiv_en_dec = mult_en_dec | div_en_dec;
@@ -7176,7 +7317,6 @@ module brq_idu (
 		stall_jump = 1'b0;
 		stall_branch = 1'b0;
 		stall_alu = 1'b0;
-		stall_fpu = 1'b0;
 		branch_set_d = 1'b0;
 		branch_spec = 1'b0;
 		branch_not_set = 1'b0;
@@ -7191,7 +7331,6 @@ module brq_idu (
 								id_fsm_d = MULTI_CYCLE;
 							else if (~lsu_req_done_i)
 								id_fsm_d = MULTI_CYCLE;
-						FloatingPoint: stall_fpu = fpu_busy_i;
 						multdiv_en_dec:
 							if (~ex_valid_i) begin
 								id_fsm_d = MULTI_CYCLE;
@@ -7228,14 +7367,12 @@ module brq_idu (
 						stall_multdiv = multdiv_en_dec;
 						stall_branch = branch_in_dec;
 						stall_jump = jump_in_dec;
-						stall_fpu = fpu_busy_i;
 					end
 				end
-				default: id_fsm_d = FIRST_CYCLE;
 			endcase
 	end
 	assign multdiv_ready_id_o = ready_wb_i;
-	assign stall_id = (((((stall_ld_hz | stall_mem) | stall_multdiv) | stall_jump) | stall_branch) | stall_alu) | stall_fpu;
+	assign stall_id = ((((stall_ld_hz | stall_mem) | stall_multdiv) | stall_jump) | stall_branch) | stall_alu;
 	assign instr_done = (~stall_id & ~flush_id) & instr_executing;
 	assign instr_first_cycle = instr_valid_i & (id_fsm_q == FIRST_CYCLE);
 	assign instr_first_cycle_id_o = instr_first_cycle;
@@ -7520,7 +7657,9 @@ module brq_ifu_fifo (
 	assign instr_addr_next = instr_addr_q[31:1] + {29'd0, ~addr_incr_two, addr_incr_two};
 	assign instr_addr_d = (clear_i ? in_addr_i[31:1] : instr_addr_next);
 	always @(posedge clk_i)
-		if (instr_addr_en)
+		if (~rst_ni)
+			instr_addr_q <= {31 {1'sb0}};
+		else if (instr_addr_en)
 			instr_addr_q <= instr_addr_d;
 	assign out_addr_next_o = {instr_addr_next, 1'b0};
 	assign out_addr_o = {instr_addr_q, 1'b0};
@@ -7558,7 +7697,7 @@ module brq_ifu_fifo (
 			valid_q <= valid_d;
 	generate
 		for (i = 0; i < DEPTH; i = i + 1) begin : g_fifo_regs
-			always @(posedge clk_i or negedge rst_ni)
+			always @(posedge clk_i)
 				if (~rst_ni) begin
 					rdata_q[i * 32+:32] <= {32 {1'sb0}};
 					err_q[i] <= 1'b0;
@@ -7693,7 +7832,9 @@ module brq_ifu_prefetch_buffer (
 	assign stored_addr_en = (valid_new_req & ~valid_req_q) & ~gnt_or_pmp_err;
 	assign stored_addr_d = instr_addr;
 	always @(posedge clk_i)
-		if (stored_addr_en)
+		if (~rst_ni)
+			stored_addr_q <= {32 {1'sb0}};
+		else if (stored_addr_en)
 			stored_addr_q <= stored_addr_d;
 	generate
 		if (BranchPredictor) begin : g_branch_predictor
@@ -7701,7 +7842,9 @@ module brq_ifu_prefetch_buffer (
 			wire branch_mispredict_addr_en;
 			assign branch_mispredict_addr_en = branch_i & predicted_branch_i;
 			always @(posedge clk_i)
-				if (branch_mispredict_addr_en)
+				if (~rst_ni)
+					branch_mispredict_addr_q <= {32 {1'sb0}};
+				else if (branch_mispredict_addr_en)
 					branch_mispredict_addr_q <= addr_next;
 			assign branch_mispredict_addr = branch_mispredict_addr_q;
 		end
@@ -7716,7 +7859,9 @@ module brq_ifu_prefetch_buffer (
 	assign fetch_addr_en = branch_or_mispredict | (valid_new_req & ~valid_req_q);
 	assign fetch_addr_d = (branch_i ? addr_i : (branch_mispredict_i ? {branch_mispredict_addr[31:2], 2'b00} : {fetch_addr_q[31:2], 2'b00})) + {{29 {1'b0}}, valid_new_req & ~valid_req_q, 2'b00};
 	always @(posedge clk_i)
-		if (fetch_addr_en)
+		if (~rst_ni)
+			fetch_addr_q <= {32 {1'sb0}};
+		else if (fetch_addr_en)
 			fetch_addr_q <= fetch_addr_d;
 	assign instr_addr = (valid_req_q ? stored_addr_q : (branch_spec_i ? addr_i : (branch_mispredict_i ? branch_mispredict_addr : fetch_addr_q)));
 	assign instr_addr_w_aligned = {instr_addr[31:2], 2'b00};
@@ -7743,9 +7888,9 @@ module brq_ifu_prefetch_buffer (
 		if (!rst_ni) begin
 			valid_req_q <= 1'b0;
 			discard_req_q <= 1'b0;
-			rdata_outstanding_q <= 'b0;
-			branch_discard_q <= 'b0;
-			rdata_pmp_err_q <= 'b0;
+			rdata_outstanding_q <= {2 {1'sb0}};
+			branch_discard_q <= {2 {1'sb0}};
+			rdata_pmp_err_q <= {2 {1'sb0}};
 		end
 		else begin
 			valid_req_q <= valid_req_d;
@@ -7951,7 +8096,17 @@ module brq_ifu (
 	assign instr_new_id_o = instr_new_id_q;
 	assign if_id_pipe_reg_we = instr_new_id_d;
 	always @(posedge clk_i)
-		if (if_id_pipe_reg_we) begin
+		if (~rst_ni) begin
+			instr_rdata_id_o <= {32 {1'sb0}};
+			instr_rdata_alu_id_o <= {32 {1'sb0}};
+			instr_fetch_err_o <= 1'b0;
+			instr_fetch_err_plus2_o <= 1'b0;
+			instr_rdata_c_id_o <= {16 {1'sb0}};
+			instr_is_compressed_id_o <= 1'b0;
+			illegal_c_insn_id_o <= 1'b0;
+			pc_id_o <= {32 {1'sb0}};
+		end
+		else if (if_id_pipe_reg_we) begin
 			instr_rdata_id_o <= instr_out;
 			instr_rdata_alu_id_o <= instr_out;
 			instr_fetch_err_o <= instr_err_out;
@@ -8376,7 +8531,7 @@ module brq_pmp (
 			end
 			always @(*) begin
 				access_fault[c] = priv_mode_i[(0 >= (PMPNumChan - 1) ? c : (PMPNumChan - 1) - c) * 2+:2] != brq_pkg_PRIV_LVL_M;
-				begin : sv2v_autoblock_98
+				begin : sv2v_autoblock_100
 					reg signed [31:0] r;
 					for (r = PMPNumRegions - 1; r >= 0; r = r - 1)
 						if (region_match_all[(c * PMPNumRegions) + r])
@@ -8422,7 +8577,7 @@ module brq_register_file_ff (
 		sv2v_cast_5 = inp;
 	endfunction
 	always @(*) begin : we_a_decoder
-		begin : sv2v_autoblock_99
+		begin : sv2v_autoblock_101
 			reg [31:0] i;
 			for (i = 1; i < NUM_WORDS; i = i + 1)
 				we_a_dec[i] = (waddr_a_i == sv2v_cast_5(i) ? we_a_i : 1'b0);
@@ -8557,7 +8712,7 @@ module brq_wbu (
 					wb_valid_q <= 1'b0;
 				else
 					wb_valid_q <= wb_valid_d;
-			always @(posedge clk_i or negedge rst_ni)
+			always @(posedge clk_i)
 				if (~rst_ni) begin
 					rf_we_wb_q <= 1'b0;
 					rf_waddr_wb_q <= {5 {1'sb0}};
@@ -10731,60 +10886,6 @@ module data_mem_top (
 		else
 			rvalid_o <= tl_req;
 endmodule
-module debug_rom_one_scratch (
-	clk_i,
-	req_i,
-	addr_i,
-	rdata_o
-);
-	input wire clk_i;
-	input wire req_i;
-	input wire [63:0] addr_i;
-	output reg [63:0] rdata_o;
-	localparam [31:0] RomSize = 13;
-	wire [831:0] mem;
-	assign mem = 832'h7b2000737b20247310802423f1402473ab1ff06f7b20247310002223001000737b20247310002623fddff06ffc0418e30024741340044403f140247302041263001474134004440310802023f14024737b2410730ff0000f0340006f0500006f00c0006f;
-	reg [3:0] addr_q;
-	always @(posedge clk_i)
-		if (req_i)
-			addr_q <= addr_i[6:3];
-	function automatic [3:0] sv2v_cast_EB05F;
-		input reg [3:0] inp;
-		sv2v_cast_EB05F = inp;
-	endfunction
-	always @(*) begin : p_outmux
-		rdata_o = {64 {1'sb0}};
-		if (addr_q < sv2v_cast_EB05F(RomSize))
-			rdata_o = mem[addr_q * 64+:64];
-	end
-endmodule
-module debug_rom (
-	clk_i,
-	req_i,
-	addr_i,
-	rdata_o
-);
-	input wire clk_i;
-	input wire req_i;
-	input wire [63:0] addr_i;
-	output reg [63:0] rdata_o;
-	localparam [31:0] RomSize = 19;
-	wire [1215:0] mem;
-	assign mem = 1216'h7b2000737b2024737b30257310852423f1402473a85ff06f7b2024737b30257310052223001000737b2024737b3025731005262300c5151300c5551300000517fd5ff06ffa041ce3002474134004440300a40433f140247302041c63001474134004440300a4043310852023f140247300c5151300c55513000005177b3510737b2410730ff0000f04c0006f07c0006f00c0006f;
-	reg [4:0] addr_q;
-	always @(posedge clk_i)
-		if (req_i)
-			addr_q <= addr_i[7:3];
-	function automatic [4:0] sv2v_cast_2C22F;
-		input reg [4:0] inp;
-		sv2v_cast_2C22F = inp;
-	endfunction
-	always @(*) begin : p_outmux
-		rdata_o = {64 {1'sb0}};
-		if (addr_q < sv2v_cast_2C22F(RomSize))
-			rdata_o = mem[addr_q * 64+:64];
-	end
-endmodule
 module div_sqrt_top_mvp (
 	Clk_CI,
 	Rst_RBI,
@@ -10923,1764 +11024,6 @@ module div_sqrt_top_mvp (
 		.Fflags_SO(Fflags_SO)
 	);
 endmodule
-module dm_csrs (
-	clk_i,
-	rst_ni,
-	testmode_i,
-	dmi_rst_ni,
-	dmi_req_valid_i,
-	dmi_req_ready_o,
-	dmi_req_i,
-	dmi_resp_valid_o,
-	dmi_resp_ready_i,
-	dmi_resp_o,
-	ndmreset_o,
-	dmactive_o,
-	hartinfo_i,
-	halted_i,
-	unavailable_i,
-	resumeack_i,
-	hartsel_o,
-	haltreq_o,
-	resumereq_o,
-	clear_resumeack_o,
-	cmd_valid_o,
-	cmd_o,
-	cmderror_valid_i,
-	cmderror_i,
-	cmdbusy_i,
-	progbuf_o,
-	data_o,
-	data_i,
-	data_valid_i,
-	sbaddress_o,
-	sbaddress_i,
-	sbaddress_write_valid_o,
-	sbreadonaddr_o,
-	sbautoincrement_o,
-	sbaccess_o,
-	sbreadondata_o,
-	sbdata_o,
-	sbdata_read_valid_o,
-	sbdata_write_valid_o,
-	sbdata_i,
-	sbdata_valid_i,
-	sbbusy_i,
-	sberror_valid_i,
-	sberror_i
-);
-	parameter [31:0] NrHarts = 1;
-	parameter [31:0] BusWidth = 32;
-	parameter [NrHarts - 1:0] SelectableHarts = {NrHarts {1'b1}};
-	input wire clk_i;
-	input wire rst_ni;
-	input wire testmode_i;
-	input wire dmi_rst_ni;
-	input wire dmi_req_valid_i;
-	output wire dmi_req_ready_o;
-	input wire [40:0] dmi_req_i;
-	output wire dmi_resp_valid_o;
-	input wire dmi_resp_ready_i;
-	output wire [33:0] dmi_resp_o;
-	output wire ndmreset_o;
-	output wire dmactive_o;
-	input wire [(NrHarts * 32) - 1:0] hartinfo_i;
-	input wire [NrHarts - 1:0] halted_i;
-	input wire [NrHarts - 1:0] unavailable_i;
-	input wire [NrHarts - 1:0] resumeack_i;
-	output wire [19:0] hartsel_o;
-	output reg [NrHarts - 1:0] haltreq_o;
-	output reg [NrHarts - 1:0] resumereq_o;
-	output reg clear_resumeack_o;
-	output wire cmd_valid_o;
-	output wire [31:0] cmd_o;
-	input wire cmderror_valid_i;
-	input wire [2:0] cmderror_i;
-	input wire cmdbusy_i;
-	localparam [4:0] dm_ProgBufSize = 5'h08;
-	output wire [(dm_ProgBufSize * 32) - 1:0] progbuf_o;
-	localparam [3:0] dm_DataCount = 4'h2;
-	output wire [(dm_DataCount * 32) - 1:0] data_o;
-	input wire [(dm_DataCount * 32) - 1:0] data_i;
-	input wire data_valid_i;
-	output wire [BusWidth - 1:0] sbaddress_o;
-	input wire [BusWidth - 1:0] sbaddress_i;
-	output reg sbaddress_write_valid_o;
-	output wire sbreadonaddr_o;
-	output wire sbautoincrement_o;
-	output wire [2:0] sbaccess_o;
-	output wire sbreadondata_o;
-	output wire [BusWidth - 1:0] sbdata_o;
-	output reg sbdata_read_valid_o;
-	output reg sbdata_write_valid_o;
-	input wire [BusWidth - 1:0] sbdata_i;
-	input wire sbdata_valid_i;
-	input wire sbbusy_i;
-	input wire sberror_valid_i;
-	input wire [2:0] sberror_i;
-	localparam [31:0] HartSelLen = (NrHarts == 1 ? 1 : $clog2(NrHarts));
-	localparam [31:0] NrHartsAligned = 2 ** HartSelLen;
-	wire [1:0] dtm_op;
-	function automatic [1:0] sv2v_cast_2;
-		input reg [1:0] inp;
-		sv2v_cast_2 = inp;
-	endfunction
-	assign dtm_op = sv2v_cast_2(dmi_req_i[33-:2]);
-	reg [31:0] resp_queue_data;
-	localparam [7:0] dm_Data0 = 8'h04;
-	function automatic [7:0] sv2v_cast_8;
-		input reg [7:0] inp;
-		sv2v_cast_8 = inp;
-	endfunction
-	localparam [7:0] DataEnd = sv2v_cast_8((dm_Data0 + {4'h0, dm_DataCount}) - 8'h01);
-	localparam [7:0] dm_ProgBuf0 = 8'h20;
-	localparam [7:0] ProgBufEnd = sv2v_cast_8((dm_ProgBuf0 + {4'h0, dm_ProgBufSize}) - 8'h01);
-	reg [31:0] haltsum0;
-	reg [31:0] haltsum1;
-	reg [31:0] haltsum2;
-	reg [31:0] haltsum3;
-	reg [((((NrHarts - 1) / 32) + 1) * 32) - 1:0] halted;
-	reg [(((NrHarts - 1) / 32) >= 0 ? ((((NrHarts - 1) / 32) + 1) * 32) - 1 : ((1 - ((NrHarts - 1) / 32)) * 32) + ((((NrHarts - 1) / 32) * 32) - 1)):(((NrHarts - 1) / 32) >= 0 ? 0 : ((NrHarts - 1) / 32) * 32)] halted_reshaped0;
-	reg [(((NrHarts - 1) / 1024) >= 0 ? ((((NrHarts - 1) / 1024) + 1) * 32) - 1 : ((1 - ((NrHarts - 1) / 1024)) * 32) + ((((NrHarts - 1) / 1024) * 32) - 1)):(((NrHarts - 1) / 1024) >= 0 ? 0 : ((NrHarts - 1) / 1024) * 32)] halted_reshaped1;
-	reg [(((NrHarts - 1) / 32768) >= 0 ? ((((NrHarts - 1) / 32768) + 1) * 32) - 1 : ((1 - ((NrHarts - 1) / 32768)) * 32) + ((((NrHarts - 1) / 32768) * 32) - 1)):(((NrHarts - 1) / 32768) >= 0 ? 0 : ((NrHarts - 1) / 32768) * 32)] halted_reshaped2;
-	reg [((((NrHarts - 1) / 1024) + 1) * 32) - 1:0] halted_flat1;
-	reg [((((NrHarts - 1) / 32768) + 1) * 32) - 1:0] halted_flat2;
-	reg [31:0] halted_flat3;
-	reg [14:0] hartsel_idx0;
-	function automatic [14:0] sv2v_cast_15;
-		input reg [14:0] inp;
-		sv2v_cast_15 = inp;
-	endfunction
-	always @(*) begin : p_haltsum0
-		halted = {(((NrHarts - 1) / 32) + 1) * 32 {1'sb0}};
-		haltsum0 = {32 {1'sb0}};
-		hartsel_idx0 = hartsel_o[19:5];
-		halted[NrHarts - 1:0] = halted_i;
-		halted_reshaped0 = halted;
-		if (hartsel_idx0 < sv2v_cast_15(((NrHarts - 1) / 32) + 1))
-			haltsum0 = halted_reshaped0[(((NrHarts - 1) / 32) >= 0 ? hartsel_idx0 : ((NrHarts - 1) / 32) - hartsel_idx0) * 32+:32];
-	end
-	reg [9:0] hartsel_idx1;
-	function automatic [9:0] sv2v_cast_10;
-		input reg [9:0] inp;
-		sv2v_cast_10 = inp;
-	endfunction
-	always @(*) begin : p_reduction1
-		halted_flat1 = {(((NrHarts - 1) / 1024) + 1) * 32 {1'sb0}};
-		haltsum1 = {32 {1'sb0}};
-		hartsel_idx1 = hartsel_o[19:10];
-		begin : sv2v_autoblock_100
-			reg [31:0] k;
-			for (k = 0; k < (((NrHarts - 1) / 32) + 1); k = k + 1)
-				halted_flat1[k] = |halted_reshaped0[(((NrHarts - 1) / 32) >= 0 ? k : ((NrHarts - 1) / 32) - k) * 32+:32];
-		end
-		halted_reshaped1 = halted_flat1;
-		if (hartsel_idx1 < sv2v_cast_10(((NrHarts - 1) / 1024) + 1))
-			haltsum1 = halted_reshaped1[(((NrHarts - 1) / 1024) >= 0 ? hartsel_idx1 : ((NrHarts - 1) / 1024) - hartsel_idx1) * 32+:32];
-	end
-	reg [4:0] hartsel_idx2;
-	function automatic [4:0] sv2v_cast_5;
-		input reg [4:0] inp;
-		sv2v_cast_5 = inp;
-	endfunction
-	always @(*) begin : p_reduction2
-		halted_flat2 = {(((NrHarts - 1) / 32768) + 1) * 32 {1'sb0}};
-		haltsum2 = {32 {1'sb0}};
-		hartsel_idx2 = hartsel_o[19:15];
-		begin : sv2v_autoblock_101
-			reg [31:0] k;
-			for (k = 0; k < (((NrHarts - 1) / 1024) + 1); k = k + 1)
-				halted_flat2[k] = |halted_reshaped1[(((NrHarts - 1) / 1024) >= 0 ? k : ((NrHarts - 1) / 1024) - k) * 32+:32];
-		end
-		halted_reshaped2 = halted_flat2;
-		if (hartsel_idx2 < sv2v_cast_5(((NrHarts - 1) / 32768) + 1))
-			haltsum2 = halted_reshaped2[(((NrHarts - 1) / 32768) >= 0 ? hartsel_idx2 : ((NrHarts - 1) / 32768) - hartsel_idx2) * 32+:32];
-	end
-	always @(*) begin : p_reduction3
-		halted_flat3 = {32 {1'sb0}};
-		begin : sv2v_autoblock_102
-			reg [31:0] k;
-			for (k = 0; k < ((NrHarts / 32768) + 1); k = k + 1)
-				halted_flat3[k] = |halted_reshaped2[(((NrHarts - 1) / 32768) >= 0 ? k : ((NrHarts - 1) / 32768) - k) * 32+:32];
-		end
-		haltsum3 = halted_flat3;
-	end
-	reg [31:0] dmstatus;
-	reg [31:0] dmcontrol_d;
-	reg [31:0] dmcontrol_q;
-	reg [31:0] abstractcs;
-	reg [2:0] cmderr_d;
-	reg [2:0] cmderr_q;
-	reg [31:0] command_d;
-	reg [31:0] command_q;
-	reg cmd_valid_d;
-	reg cmd_valid_q;
-	reg [31:0] abstractauto_d;
-	reg [31:0] abstractauto_q;
-	reg [31:0] sbcs_d;
-	reg [31:0] sbcs_q;
-	reg [63:0] sbaddr_d;
-	reg [63:0] sbaddr_q;
-	reg [63:0] sbdata_d;
-	reg [63:0] sbdata_q;
-	wire [NrHarts - 1:0] havereset_d;
-	reg [NrHarts - 1:0] havereset_q;
-	reg [(dm_ProgBufSize * 32) - 1:0] progbuf_d;
-	reg [(dm_ProgBufSize * 32) - 1:0] progbuf_q;
-	reg [(dm_DataCount * 32) - 1:0] data_d;
-	reg [(dm_DataCount * 32) - 1:0] data_q;
-	reg [HartSelLen - 1:0] selected_hart;
-	localparam [1:0] dm_DTM_SUCCESS = 2'h0;
-	assign dmi_resp_o[1-:2] = dm_DTM_SUCCESS;
-	assign sbautoincrement_o = sbcs_q[16];
-	assign sbreadonaddr_o = sbcs_q[20];
-	assign sbreadondata_o = sbcs_q[15];
-	assign sbaccess_o = sbcs_q[19-:3];
-	assign sbdata_o = sbdata_q[BusWidth - 1:0];
-	assign sbaddress_o = sbaddr_q[BusWidth - 1:0];
-	assign hartsel_o = {dmcontrol_q[15-:10], dmcontrol_q[25-:10]};
-	reg [NrHartsAligned - 1:0] havereset_d_aligned;
-	wire [NrHartsAligned - 1:0] havereset_q_aligned;
-	wire [NrHartsAligned - 1:0] resumeack_aligned;
-	wire [NrHartsAligned - 1:0] unavailable_aligned;
-	wire [NrHartsAligned - 1:0] halted_aligned;
-	function automatic [NrHartsAligned - 1:0] sv2v_cast_C60B8;
-		input reg [NrHartsAligned - 1:0] inp;
-		sv2v_cast_C60B8 = inp;
-	endfunction
-	assign resumeack_aligned = sv2v_cast_C60B8(resumeack_i);
-	assign unavailable_aligned = sv2v_cast_C60B8(unavailable_i);
-	assign halted_aligned = sv2v_cast_C60B8(halted_i);
-	function automatic [NrHarts - 1:0] sv2v_cast_25FFB;
-		input reg [NrHarts - 1:0] inp;
-		sv2v_cast_25FFB = inp;
-	endfunction
-	assign havereset_d = sv2v_cast_25FFB(havereset_d_aligned);
-	assign havereset_q_aligned = sv2v_cast_C60B8(havereset_q);
-	reg [(NrHartsAligned * 32) - 1:0] hartinfo_aligned;
-	always @(*) begin : p_hartinfo_align
-		hartinfo_aligned = {NrHartsAligned * 32 {1'sb0}};
-		hartinfo_aligned[32 * ((NrHarts - 1) - (NrHarts - 1))+:32 * NrHarts] = hartinfo_i;
-	end
-	wire [7:0] dm_csr_addr;
-	reg [31:0] sbcs;
-	reg [31:0] a_abstractcs;
-	wire [3:0] autoexecdata_idx;
-	assign dm_csr_addr = sv2v_cast_8({1'b0, dmi_req_i[40-:7]});
-	function automatic [3:0] sv2v_cast_4;
-		input reg [3:0] inp;
-		sv2v_cast_4 = inp;
-	endfunction
-	assign autoexecdata_idx = sv2v_cast_4({dm_csr_addr} - {dm_Data0});
-	localparam [3:0] dm_DbgVersion013 = 4'h2;
-	localparam [7:0] dm_AbstractAuto = 8'h18;
-	localparam [7:0] dm_AbstractCS = 8'h16;
-	localparam [2:0] dm_CmdErrBusy = 1;
-	localparam [2:0] dm_CmdErrNone = 0;
-	localparam [7:0] dm_Command = 8'h17;
-	localparam [7:0] dm_DMControl = 8'h10;
-	localparam [7:0] dm_DMStatus = 8'h11;
-	localparam [1:0] dm_DTM_READ = 2'h1;
-	localparam [1:0] dm_DTM_WRITE = 2'h2;
-	localparam [7:0] dm_HaltSum0 = 8'h40;
-	localparam [7:0] dm_HaltSum1 = 8'h13;
-	localparam [7:0] dm_HaltSum2 = 8'h34;
-	localparam [7:0] dm_HaltSum3 = 8'h35;
-	localparam [7:0] dm_Hartinfo = 8'h12;
-	localparam [7:0] dm_SBAddress0 = 8'h39;
-	localparam [7:0] dm_SBAddress1 = 8'h3a;
-	localparam [7:0] dm_SBCS = 8'h38;
-	localparam [7:0] dm_SBData0 = 8'h3c;
-	localparam [7:0] dm_SBData1 = 8'h3d;
-	function automatic [31:0] sv2v_cast_32;
-		input reg [31:0] inp;
-		sv2v_cast_32 = inp;
-	endfunction
-	function automatic [63:0] sv2v_cast_64;
-		input reg [63:0] inp;
-		sv2v_cast_64 = inp;
-	endfunction
-	function automatic [$clog2(4'h2) - 1:0] sv2v_cast_BB9EC;
-		input reg [$clog2(4'h2) - 1:0] inp;
-		sv2v_cast_BB9EC = inp;
-	endfunction
-	function automatic [2:0] sv2v_cast_3;
-		input reg [2:0] inp;
-		sv2v_cast_3 = inp;
-	endfunction
-	function automatic [11:0] sv2v_cast_12;
-		input reg [11:0] inp;
-		sv2v_cast_12 = inp;
-	endfunction
-	function automatic [15:0] sv2v_cast_16;
-		input reg [15:0] inp;
-		sv2v_cast_16 = inp;
-	endfunction
-	function automatic [6:0] sv2v_cast_F50EE;
-		input reg [6:0] inp;
-		sv2v_cast_F50EE = inp;
-	endfunction
-	always @(*) begin : csr_read_write
-		dmstatus = {32 {1'sb0}};
-		dmstatus[3-:4] = dm_DbgVersion013;
-		dmstatus[7] = 1'b1;
-		dmstatus[5] = 1'b0;
-		dmstatus[19] = havereset_q_aligned[selected_hart];
-		dmstatus[18] = havereset_q_aligned[selected_hart];
-		dmstatus[17] = resumeack_aligned[selected_hart];
-		dmstatus[16] = resumeack_aligned[selected_hart];
-		dmstatus[13] = unavailable_aligned[selected_hart];
-		dmstatus[12] = unavailable_aligned[selected_hart];
-		dmstatus[15] = sv2v_cast_32(hartsel_o) > (NrHarts - 32'sd1);
-		dmstatus[14] = sv2v_cast_32(hartsel_o) > (NrHarts - 32'sd1);
-		dmstatus[9] = halted_aligned[selected_hart] & ~unavailable_aligned[selected_hart];
-		dmstatus[8] = halted_aligned[selected_hart] & ~unavailable_aligned[selected_hart];
-		dmstatus[11] = ~halted_aligned[selected_hart] & ~unavailable_aligned[selected_hart];
-		dmstatus[10] = ~halted_aligned[selected_hart] & ~unavailable_aligned[selected_hart];
-		abstractcs = {32 {1'sb0}};
-		abstractcs[3-:4] = dm_DataCount;
-		abstractcs[28-:5] = dm_ProgBufSize;
-		abstractcs[12] = cmdbusy_i;
-		abstractcs[10-:3] = cmderr_q;
-		abstractauto_d = abstractauto_q;
-		abstractauto_d[15-:4] = {4 {1'sb0}};
-		havereset_d_aligned = sv2v_cast_C60B8(havereset_q);
-		dmcontrol_d = dmcontrol_q;
-		cmderr_d = cmderr_q;
-		command_d = command_q;
-		progbuf_d = progbuf_q;
-		data_d = data_q;
-		sbcs_d = sbcs_q;
-		sbaddr_d = sv2v_cast_64(sbaddress_i);
-		sbdata_d = sbdata_q;
-		resp_queue_data = 32'h00000000;
-		cmd_valid_d = 1'b0;
-		sbaddress_write_valid_o = 1'b0;
-		sbdata_read_valid_o = 1'b0;
-		sbdata_write_valid_o = 1'b0;
-		clear_resumeack_o = 1'b0;
-		sbcs = {32 {1'sb0}};
-		a_abstractcs = {32 {1'sb0}};
-		if ((dmi_req_ready_o && dmi_req_valid_i) && (dtm_op == dm_DTM_READ))
-			if ((dm_Data0 <= dm_csr_addr) && (DataEnd >= dm_csr_addr)) begin
-				resp_queue_data = data_q[sv2v_cast_BB9EC(autoexecdata_idx) * 32+:32];
-				if (!cmdbusy_i)
-					cmd_valid_d = abstractauto_q[autoexecdata_idx];
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_DMControl)
-				resp_queue_data = dmcontrol_q;
-			else if (dm_csr_addr == dm_DMStatus)
-				resp_queue_data = dmstatus;
-			else if (dm_csr_addr == dm_Hartinfo)
-				resp_queue_data = hartinfo_aligned[selected_hart * 32+:32];
-			else if (dm_csr_addr == dm_AbstractCS)
-				resp_queue_data = abstractcs;
-			else if (dm_csr_addr == dm_AbstractAuto)
-				resp_queue_data = abstractauto_q;
-			else if (dm_csr_addr == dm_Command)
-				resp_queue_data = {32 {1'sb0}};
-			else if ((dm_ProgBuf0 <= dm_csr_addr) && (ProgBufEnd >= dm_csr_addr)) begin
-				resp_queue_data = progbuf_q[dmi_req_i[$clog2(5'h08) + 33:34] * 32+:32];
-				if (!cmdbusy_i)
-					cmd_valid_d = abstractauto_q[{1'b1, dmi_req_i[37:34]}];
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_HaltSum0)
-				resp_queue_data = haltsum0;
-			else if (dm_csr_addr == dm_HaltSum1)
-				resp_queue_data = haltsum1;
-			else if (dm_csr_addr == dm_HaltSum2)
-				resp_queue_data = haltsum2;
-			else if (dm_csr_addr == dm_HaltSum3)
-				resp_queue_data = haltsum3;
-			else if (dm_csr_addr == dm_SBCS)
-				resp_queue_data = sbcs_q;
-			else if (dm_csr_addr == dm_SBAddress0)
-				resp_queue_data = sbaddr_q[31:0];
-			else if (dm_csr_addr == dm_SBAddress1)
-				resp_queue_data = sbaddr_q[63:32];
-			else if (dm_csr_addr == dm_SBData0) begin
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else begin
-					sbdata_read_valid_o = sbcs_q[14-:3] == {3 {1'sb0}};
-					resp_queue_data = sbdata_q[31:0];
-				end
-			end
-			else if (dm_csr_addr == dm_SBData1)
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else
-					resp_queue_data = sbdata_q[63:32];
-		if ((dmi_req_ready_o && dmi_req_valid_i) && (dtm_op == dm_DTM_WRITE))
-			if ((dm_Data0 <= dm_csr_addr) && (DataEnd >= dm_csr_addr)) begin
-				if (dm_DataCount > 0)
-					if (!cmdbusy_i) begin
-						data_d[dmi_req_i[$clog2(4'h2) + 33:34] * 32+:32] = dmi_req_i[31-:32];
-						cmd_valid_d = abstractauto_q[autoexecdata_idx];
-					end
-					else if (cmderr_q == dm_CmdErrNone)
-						cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_DMControl) begin
-				dmcontrol_d = dmi_req_i[31-:32];
-				if (dmcontrol_d[28])
-					havereset_d_aligned[selected_hart] = 1'b0;
-			end
-			else if (dm_csr_addr == dm_DMStatus)
-				;
-			else if (dm_csr_addr == dm_Hartinfo)
-				;
-			else if (dm_csr_addr == dm_AbstractCS) begin
-				a_abstractcs = sv2v_cast_32(dmi_req_i[31-:32]);
-				if (!cmdbusy_i)
-					cmderr_d = sv2v_cast_3(~a_abstractcs[10-:3] & cmderr_q);
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_Command) begin
-				if (!cmdbusy_i) begin
-					cmd_valid_d = 1'b1;
-					command_d = sv2v_cast_32(dmi_req_i[31-:32]);
-				end
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_AbstractAuto) begin
-				if (!cmdbusy_i) begin
-					abstractauto_d = 32'h00000000;
-					abstractauto_d[11-:12] = sv2v_cast_12(dmi_req_i[dm_DataCount - 1:0]);
-					abstractauto_d[31-:16] = sv2v_cast_16(dmi_req_i[dm_ProgBufSize + 15:16]);
-				end
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if ((dm_ProgBuf0 <= dm_csr_addr) && (ProgBufEnd >= dm_csr_addr)) begin
-				if (!cmdbusy_i) begin
-					progbuf_d[dmi_req_i[$clog2(5'h08) + 33:34] * 32+:32] = dmi_req_i[31-:32];
-					cmd_valid_d = abstractauto_q[{1'b1, dmi_req_i[37:34]}];
-				end
-				else if (cmderr_q == dm_CmdErrNone)
-					cmderr_d = dm_CmdErrBusy;
-			end
-			else if (dm_csr_addr == dm_SBCS) begin
-				if (sbbusy_i)
-					sbcs_d[22] = 1'b1;
-				else begin
-					sbcs = sv2v_cast_32(dmi_req_i[31-:32]);
-					sbcs_d = sbcs;
-					sbcs_d[22] = sbcs_q[22] & ~sbcs[22];
-					sbcs_d[14-:3] = sbcs_q[14-:3] & ~sbcs[14-:3];
-				end
-			end
-			else if (dm_csr_addr == dm_SBAddress0) begin
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else begin
-					sbaddr_d[31:0] = dmi_req_i[31-:32];
-					sbaddress_write_valid_o = sbcs_q[14-:3] == {3 {1'sb0}};
-				end
-			end
-			else if (dm_csr_addr == dm_SBAddress1) begin
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else
-					sbaddr_d[63:32] = dmi_req_i[31-:32];
-			end
-			else if (dm_csr_addr == dm_SBData0) begin
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else begin
-					sbdata_d[31:0] = dmi_req_i[31-:32];
-					sbdata_write_valid_o = sbcs_q[14-:3] == {3 {1'sb0}};
-				end
-			end
-			else if (dm_csr_addr == dm_SBData1)
-				if (sbbusy_i || sbcs_q[22])
-					sbcs_d[22] = 1'b1;
-				else
-					sbdata_d[63:32] = dmi_req_i[31-:32];
-		if (cmderror_valid_i)
-			cmderr_d = cmderror_i;
-		if (data_valid_i)
-			data_d = data_i;
-		if (ndmreset_o)
-			havereset_d_aligned[NrHarts - 1:0] = {NrHarts {1'sb1}};
-		if (sberror_valid_i)
-			sbcs_d[14-:3] = sberror_i;
-		if (sbdata_valid_i)
-			sbdata_d = sv2v_cast_64(sbdata_i);
-		dmcontrol_d[26] = 1'b0;
-		dmcontrol_d[29] = 1'b0;
-		dmcontrol_d[3] = 1'b0;
-		dmcontrol_d[2] = 1'b0;
-		dmcontrol_d[27] = 1'b0;
-		dmcontrol_d[5-:2] = {2 {1'sb0}};
-		dmcontrol_d[28] = 1'b0;
-		if (!dmcontrol_q[30] && dmcontrol_d[30])
-			clear_resumeack_o = 1'b1;
-		if (dmcontrol_q[30] && resumeack_i)
-			dmcontrol_d[30] = 1'b0;
-		sbcs_d[31-:3] = 3'd1;
-		sbcs_d[21] = sbbusy_i;
-		sbcs_d[11-:7] = sv2v_cast_F50EE(BusWidth);
-		sbcs_d[4] = 1'b0;
-		sbcs_d[3] = BusWidth == 32'd64;
-		sbcs_d[2] = BusWidth == 32'd32;
-		sbcs_d[1] = 1'b0;
-		sbcs_d[0] = 1'b0;
-		sbcs_d[19-:3] = (BusWidth == 32'd64 ? 3'd3 : 3'd2);
-	end
-	function automatic [HartSelLen - 1:0] sv2v_cast_41A1E;
-		input reg [HartSelLen - 1:0] inp;
-		sv2v_cast_41A1E = inp;
-	endfunction
-	always @(*) begin : p_outmux
-		selected_hart = hartsel_o[HartSelLen - 1:0];
-		haltreq_o = {NrHarts {1'sb0}};
-		resumereq_o = {NrHarts {1'sb0}};
-		if (selected_hart <= sv2v_cast_41A1E(NrHarts - 1)) begin
-			haltreq_o[selected_hart] = dmcontrol_q[31];
-			resumereq_o[selected_hart] = dmcontrol_q[30];
-		end
-	end
-	assign dmactive_o = dmcontrol_q[0];
-	assign cmd_o = command_q;
-	assign cmd_valid_o = cmd_valid_q;
-	assign progbuf_o = progbuf_q;
-	assign data_o = data_q;
-	assign ndmreset_o = dmcontrol_q[1];
-	wire unused_testmode;
-	assign unused_testmode = testmode_i;
-	fifo_sync #(
-		.Width(32),
-		.Pass(1'b0),
-		.Depth(2)
-	) i_fifo(
-		.clk_i(clk_i),
-		.rst_ni(dmi_rst_ni),
-		.clr_i(1'b0),
-		.wdata_i(resp_queue_data),
-		.wvalid_i(dmi_req_valid_i),
-		.wready_o(dmi_req_ready_o),
-		.rdata_o(dmi_resp_o[33-:32]),
-		.rvalid_o(dmi_resp_valid_o),
-		.rready_i(dmi_resp_ready_i),
-		.full_o(),
-		.depth_o()
-	);
-	always @(posedge clk_i or negedge rst_ni) begin : p_regs
-		if (!rst_ni) begin
-			dmcontrol_q <= {32 {1'sb0}};
-			cmderr_q <= dm_CmdErrNone;
-			command_q <= {32 {1'sb0}};
-			cmd_valid_q <= 1'b0;
-			abstractauto_q <= {32 {1'sb0}};
-			progbuf_q <= {dm_ProgBufSize * 32 {1'sb0}};
-			data_q <= {dm_DataCount * 32 {1'sb0}};
-			sbcs_q <= {32 {1'sb0}};
-			sbaddr_q <= {64 {1'sb0}};
-			sbdata_q <= {64 {1'sb0}};
-			havereset_q <= {NrHarts {1'sb1}};
-		end
-		else begin
-			havereset_q <= SelectableHarts & havereset_d;
-			if (!dmcontrol_q[0]) begin
-				dmcontrol_q[31] <= 1'b0;
-				dmcontrol_q[30] <= 1'b0;
-				dmcontrol_q[29] <= 1'b0;
-				dmcontrol_q[28] <= 1'b0;
-				dmcontrol_q[27] <= 1'b0;
-				dmcontrol_q[26] <= 1'b0;
-				dmcontrol_q[25-:10] <= {10 {1'sb0}};
-				dmcontrol_q[15-:10] <= {10 {1'sb0}};
-				dmcontrol_q[5-:2] <= {2 {1'sb0}};
-				dmcontrol_q[3] <= 1'b0;
-				dmcontrol_q[2] <= 1'b0;
-				dmcontrol_q[1] <= 1'b0;
-				dmcontrol_q[0] <= dmcontrol_d[0];
-				cmderr_q <= dm_CmdErrNone;
-				command_q <= {32 {1'sb0}};
-				cmd_valid_q <= 1'b0;
-				abstractauto_q <= {32 {1'sb0}};
-				progbuf_q <= {dm_ProgBufSize * 32 {1'sb0}};
-				data_q <= {dm_DataCount * 32 {1'sb0}};
-				sbcs_q <= {32 {1'sb0}};
-				sbaddr_q <= {64 {1'sb0}};
-				sbdata_q <= {64 {1'sb0}};
-			end
-			else begin
-				dmcontrol_q <= dmcontrol_d;
-				cmderr_q <= cmderr_d;
-				command_q <= command_d;
-				cmd_valid_q <= cmd_valid_d;
-				abstractauto_q <= abstractauto_d;
-				progbuf_q <= progbuf_d;
-				data_q <= data_d;
-				sbcs_q <= sbcs_d;
-				sbaddr_q <= sbaddr_d;
-				sbdata_q <= sbdata_d;
-			end
-		end
-	end
-endmodule
-module dmi_cdc (
-	tck_i,
-	trst_ni,
-	jtag_dmi_req_i,
-	jtag_dmi_ready_o,
-	jtag_dmi_valid_i,
-	jtag_dmi_resp_o,
-	jtag_dmi_valid_o,
-	jtag_dmi_ready_i,
-	clk_i,
-	rst_ni,
-	core_dmi_req_o,
-	core_dmi_valid_o,
-	core_dmi_ready_i,
-	core_dmi_resp_i,
-	core_dmi_ready_o,
-	core_dmi_valid_i
-);
-	input wire tck_i;
-	input wire trst_ni;
-	input wire [40:0] jtag_dmi_req_i;
-	output wire jtag_dmi_ready_o;
-	input wire jtag_dmi_valid_i;
-	output wire [33:0] jtag_dmi_resp_o;
-	output wire jtag_dmi_valid_o;
-	input wire jtag_dmi_ready_i;
-	input wire clk_i;
-	input wire rst_ni;
-	output wire [40:0] core_dmi_req_o;
-	output wire core_dmi_valid_o;
-	input wire core_dmi_ready_i;
-	input wire [33:0] core_dmi_resp_i;
-	output wire core_dmi_ready_o;
-	input wire core_dmi_valid_i;
-	fifo_async #(
-		.Width(41),
-		.Depth(4)
-	) i_cdc_req(
-		.clk_wr_i(tck_i),
-		.rst_wr_ni(trst_ni),
-		.wvalid_i(jtag_dmi_valid_i),
-		.wready_o(jtag_dmi_ready_o),
-		.wdata_i(jtag_dmi_req_i),
-		.wdepth_o(),
-		.clk_rd_i(clk_i),
-		.rst_rd_ni(rst_ni),
-		.rvalid_o(core_dmi_valid_o),
-		.rready_i(core_dmi_ready_i),
-		.rdata_o(core_dmi_req_o),
-		.rdepth_o()
-	);
-	fifo_async #(
-		.Width(34),
-		.Depth(4)
-	) i_cdc_resp(
-		.clk_wr_i(clk_i),
-		.rst_wr_ni(rst_ni),
-		.wvalid_i(core_dmi_valid_i),
-		.wready_o(core_dmi_ready_o),
-		.wdata_i(core_dmi_resp_i),
-		.wdepth_o(),
-		.clk_rd_i(tck_i),
-		.rst_rd_ni(trst_ni),
-		.rvalid_o(jtag_dmi_valid_o),
-		.rready_i(jtag_dmi_ready_i),
-		.rdata_o(jtag_dmi_resp_o),
-		.rdepth_o()
-	);
-endmodule
-module dmi_jtag (
-	clk_i,
-	rst_ni,
-	testmode_i,
-	dmi_rst_no,
-	dmi_req_o,
-	dmi_req_valid_o,
-	dmi_req_ready_i,
-	dmi_resp_i,
-	dmi_resp_ready_o,
-	dmi_resp_valid_i,
-	tck_i,
-	tms_i,
-	trst_ni,
-	td_i,
-	td_o,
-	tdo_oe_o
-);
-	parameter [31:0] IdcodeValue = 32'h00000001;
-	input wire clk_i;
-	input wire rst_ni;
-	input wire testmode_i;
-	output wire dmi_rst_no;
-	output wire [40:0] dmi_req_o;
-	output wire dmi_req_valid_o;
-	input wire dmi_req_ready_i;
-	input wire [33:0] dmi_resp_i;
-	output wire dmi_resp_ready_o;
-	input wire dmi_resp_valid_i;
-	input wire tck_i;
-	input wire tms_i;
-	input wire trst_ni;
-	input wire td_i;
-	output wire td_o;
-	output wire tdo_oe_o;
-	assign dmi_rst_no = rst_ni;
-	wire test_logic_reset;
-	wire shift_dr;
-	wire update_dr;
-	wire capture_dr;
-	wire dmi_access;
-	wire dtmcs_select;
-	wire dmi_reset;
-	wire dmi_tdi;
-	wire dmi_tdo;
-	wire [40:0] dmi_req;
-	wire dmi_req_ready;
-	reg dmi_req_valid;
-	wire [33:0] dmi_resp;
-	wire dmi_resp_valid;
-	wire dmi_resp_ready;
-	reg [2:0] state_d;
-	reg [2:0] state_q;
-	reg [40:0] dr_d;
-	reg [40:0] dr_q;
-	reg [6:0] address_d;
-	reg [6:0] address_q;
-	reg [31:0] data_d;
-	reg [31:0] data_q;
-	wire [40:0] dmi;
-	assign dmi = dr_q;
-	assign dmi_req[40-:7] = address_q;
-	assign dmi_req[31-:32] = data_q;
-	localparam [2:0] Write = 3;
-	localparam [1:0] dm_DTM_READ = 2'h1;
-	localparam [1:0] dm_DTM_WRITE = 2'h2;
-	assign dmi_req[33-:2] = (state_q == Write ? dm_DTM_WRITE : dm_DTM_READ);
-	assign dmi_resp_ready = 1'b1;
-	reg error_dmi_busy;
-	reg [1:0] error_d;
-	reg [1:0] error_q;
-	localparam [1:0] DMIBusy = 2'h3;
-	localparam [1:0] DMINoError = 2'h0;
-	localparam [2:0] Idle = 0;
-	localparam [2:0] Read = 1;
-	localparam [2:0] WaitReadValid = 2;
-	localparam [2:0] WaitWriteValid = 4;
-	function automatic [1:0] sv2v_cast_2;
-		input reg [1:0] inp;
-		sv2v_cast_2 = inp;
-	endfunction
-	always @(*) begin : p_fsm
-		error_dmi_busy = 1'b0;
-		state_d = state_q;
-		address_d = address_q;
-		data_d = data_q;
-		error_d = error_q;
-		dmi_req_valid = 1'b0;
-		case (state_q)
-			Idle:
-				if ((dmi_access && update_dr) && (error_q == DMINoError)) begin
-					address_d = dmi[40-:7];
-					data_d = dmi[33-:32];
-					if (sv2v_cast_2(dmi[1-:2]) == dm_DTM_READ)
-						state_d = Read;
-					else if (sv2v_cast_2(dmi[1-:2]) == dm_DTM_WRITE)
-						state_d = Write;
-				end
-			Read: begin
-				dmi_req_valid = 1'b1;
-				if (dmi_req_ready)
-					state_d = WaitReadValid;
-			end
-			WaitReadValid:
-				if (dmi_resp_valid) begin
-					data_d = dmi_resp[33-:32];
-					state_d = Idle;
-				end
-			Write: begin
-				dmi_req_valid = 1'b1;
-				if (dmi_req_ready)
-					state_d = WaitWriteValid;
-			end
-			WaitWriteValid:
-				if (dmi_resp_valid)
-					state_d = Idle;
-			default:
-				if (dmi_resp_valid)
-					state_d = Idle;
-		endcase
-		if (update_dr && (state_q != Idle))
-			error_dmi_busy = 1'b1;
-		if (capture_dr && |{state_q == Read, state_q == WaitReadValid})
-			error_dmi_busy = 1'b1;
-		if (error_dmi_busy)
-			error_d = DMIBusy;
-		if ((update_dr && dmi_reset) && dtmcs_select)
-			error_d = DMINoError;
-	end
-	assign dmi_tdo = dr_q[0];
-	always @(*) begin : p_shift
-		dr_d = dr_q;
-		if (capture_dr)
-			if (dmi_access)
-				if ((error_q == DMINoError) && !error_dmi_busy)
-					dr_d = {address_q, data_q, DMINoError};
-				else if ((error_q == DMIBusy) || error_dmi_busy)
-					dr_d = {address_q, data_q, DMIBusy};
-		if (shift_dr)
-			if (dmi_access)
-				dr_d = {dmi_tdi, dr_q[40:1]};
-		if (test_logic_reset)
-			dr_d = {41 {1'sb0}};
-	end
-	always @(posedge tck_i or negedge trst_ni) begin : p_regs
-		if (!trst_ni) begin
-			dr_q <= {41 {1'sb0}};
-			state_q <= Idle;
-			address_q <= {7 {1'sb0}};
-			data_q <= {32 {1'sb0}};
-			error_q <= DMINoError;
-		end
-		else begin
-			dr_q <= dr_d;
-			state_q <= state_d;
-			address_q <= address_d;
-			data_q <= data_d;
-			error_q <= error_d;
-		end
-	end
-	dmi_jtag_tap #(
-		.IrLength(5),
-		.IdcodeValue(IdcodeValue)
-	) i_dmi_jtag_tap(
-		.tck_i(tck_i),
-		.tms_i(tms_i),
-		.trst_ni(trst_ni),
-		.td_i(td_i),
-		.td_o(td_o),
-		.tdo_oe_o(tdo_oe_o),
-		.testmode_i(testmode_i),
-		.test_logic_reset_o(test_logic_reset),
-		.shift_dr_o(shift_dr),
-		.update_dr_o(update_dr),
-		.capture_dr_o(capture_dr),
-		.dmi_access_o(dmi_access),
-		.dtmcs_select_o(dtmcs_select),
-		.dmi_reset_o(dmi_reset),
-		.dmi_error_i(error_q),
-		.dmi_tdi_o(dmi_tdi),
-		.dmi_tdo_i(dmi_tdo)
-	);
-	dmi_cdc i_dmi_cdc(
-		.tck_i(tck_i),
-		.trst_ni(trst_ni),
-		.jtag_dmi_req_i(dmi_req),
-		.jtag_dmi_ready_o(dmi_req_ready),
-		.jtag_dmi_valid_i(dmi_req_valid),
-		.jtag_dmi_resp_o(dmi_resp),
-		.jtag_dmi_valid_o(dmi_resp_valid),
-		.jtag_dmi_ready_i(dmi_resp_ready),
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.core_dmi_req_o(dmi_req_o),
-		.core_dmi_valid_o(dmi_req_valid_o),
-		.core_dmi_ready_i(dmi_req_ready_i),
-		.core_dmi_resp_i(dmi_resp_i),
-		.core_dmi_ready_o(dmi_resp_ready_o),
-		.core_dmi_valid_i(dmi_resp_valid_i)
-	);
-endmodule
-module dmi_jtag_tap (
-	tck_i,
-	tms_i,
-	trst_ni,
-	td_i,
-	td_o,
-	tdo_oe_o,
-	testmode_i,
-	test_logic_reset_o,
-	shift_dr_o,
-	update_dr_o,
-	capture_dr_o,
-	dmi_access_o,
-	dtmcs_select_o,
-	dmi_reset_o,
-	dmi_error_i,
-	dmi_tdi_o,
-	dmi_tdo_i
-);
-	parameter [31:0] IrLength = 5;
-	parameter [31:0] IdcodeValue = 32'h00000001;
-	input wire tck_i;
-	input wire tms_i;
-	input wire trst_ni;
-	input wire td_i;
-	output reg td_o;
-	output reg tdo_oe_o;
-	input wire testmode_i;
-	output reg test_logic_reset_o;
-	output reg shift_dr_o;
-	output reg update_dr_o;
-	output reg capture_dr_o;
-	output reg dmi_access_o;
-	output reg dtmcs_select_o;
-	output wire dmi_reset_o;
-	input wire [1:0] dmi_error_i;
-	output wire dmi_tdi_o;
-	input wire dmi_tdo_i;
-	assign dmi_tdi_o = td_i;
-	reg [3:0] tap_state_q;
-	reg [3:0] tap_state_d;
-	reg [IrLength - 1:0] jtag_ir_shift_d;
-	reg [IrLength - 1:0] jtag_ir_shift_q;
-	reg [IrLength - 1:0] jtag_ir_d;
-	reg [IrLength - 1:0] jtag_ir_q;
-	reg capture_ir;
-	reg shift_ir;
-	reg update_ir;
-	localparam [IrLength - 1:0] IDCODE = 'h1;
-	function automatic [IrLength - 1:0] sv2v_cast_42A93;
-		input reg [IrLength - 1:0] inp;
-		sv2v_cast_42A93 = inp;
-	endfunction
-	always @(*) begin : p_jtag
-		jtag_ir_shift_d = jtag_ir_shift_q;
-		jtag_ir_d = jtag_ir_q;
-		if (shift_ir)
-			jtag_ir_shift_d = {td_i, jtag_ir_shift_q[IrLength - 1:1]};
-		if (capture_ir)
-			jtag_ir_shift_d = sv2v_cast_42A93(4'b0101);
-		if (update_ir)
-			jtag_ir_d = jtag_ir_shift_q;
-		if (test_logic_reset_o) begin
-			jtag_ir_shift_d = {IrLength {1'sb0}};
-			jtag_ir_d = IDCODE;
-		end
-	end
-	always @(posedge tck_i or negedge trst_ni) begin : p_jtag_ir_reg
-		if (!trst_ni) begin
-			jtag_ir_shift_q <= {IrLength {1'sb0}};
-			jtag_ir_q <= IDCODE;
-		end
-		else begin
-			jtag_ir_shift_q <= jtag_ir_shift_d;
-			jtag_ir_q <= jtag_ir_d;
-		end
-	end
-	reg [31:0] idcode_d;
-	reg [31:0] idcode_q;
-	reg idcode_select;
-	reg bypass_select;
-	reg [31:0] dtmcs_d;
-	reg [31:0] dtmcs_q;
-	reg bypass_d;
-	reg bypass_q;
-	assign dmi_reset_o = dtmcs_q[16];
-	function automatic [30:0] sv2v_cast_31;
-		input reg [30:0] inp;
-		sv2v_cast_31 = inp;
-	endfunction
-	always @(*) begin
-		idcode_d = idcode_q;
-		bypass_d = bypass_q;
-		dtmcs_d = dtmcs_q;
-		if (capture_dr_o) begin
-			if (idcode_select)
-				idcode_d = IdcodeValue;
-			if (bypass_select)
-				bypass_d = 1'b0;
-			if (dtmcs_select_o)
-				dtmcs_d = {20'b00000000000000000001, dmi_error_i, 6'd7, 4'd1};
-		end
-		if (shift_dr_o) begin
-			if (idcode_select)
-				idcode_d = {td_i, sv2v_cast_31(idcode_q >> 1)};
-			if (bypass_select)
-				bypass_d = td_i;
-			if (dtmcs_select_o)
-				dtmcs_d = {td_i, sv2v_cast_31(dtmcs_q >> 1)};
-		end
-		if (test_logic_reset_o) begin
-			idcode_d = IdcodeValue;
-			bypass_d = 1'b0;
-		end
-	end
-	localparam [IrLength - 1:0] BYPASS0 = 'h0;
-	localparam [IrLength - 1:0] BYPASS1 = 'h1f;
-	localparam [IrLength - 1:0] DMIACCESS = 'h11;
-	localparam [IrLength - 1:0] DTMCSR = 'h10;
-	always @(*) begin : p_data_reg_sel
-		dmi_access_o = 1'b0;
-		dtmcs_select_o = 1'b0;
-		idcode_select = 1'b0;
-		bypass_select = 1'b0;
-		case (jtag_ir_q)
-			BYPASS0: bypass_select = 1'b1;
-			IDCODE: idcode_select = 1'b1;
-			DTMCSR: dtmcs_select_o = 1'b1;
-			DMIACCESS: dmi_access_o = 1'b1;
-			BYPASS1: bypass_select = 1'b1;
-			default: bypass_select = 1'b1;
-		endcase
-	end
-	reg tdo_mux;
-	always @(*) begin : p_out_sel
-		if (shift_ir)
-			tdo_mux = jtag_ir_shift_q[0];
-		else
-			case (jtag_ir_q)
-				IDCODE: tdo_mux = idcode_q[0];
-				DTMCSR: tdo_mux = dtmcs_q[0];
-				DMIACCESS: tdo_mux = dmi_tdo_i;
-				default: tdo_mux = bypass_q;
-			endcase
-	end
-	wire tck_n;
-	prim_generic_clock_inv #(.HasScanMode(1'b1)) i_tck_inv(
-		.clk_i(tck_i),
-		.clk_no(tck_n),
-		.scanmode_i(testmode_i)
-	);
-	always @(posedge tck_n or negedge trst_ni) begin : p_tdo_regs
-		if (!trst_ni) begin
-			td_o <= 1'b0;
-			tdo_oe_o <= 1'b0;
-		end
-		else begin
-			td_o <= tdo_mux;
-			tdo_oe_o <= shift_ir | shift_dr_o;
-		end
-	end
-	localparam [3:0] CaptureDr = 3;
-	localparam [3:0] CaptureIr = 10;
-	localparam [3:0] Exit1Dr = 5;
-	localparam [3:0] Exit1Ir = 12;
-	localparam [3:0] Exit2Dr = 7;
-	localparam [3:0] Exit2Ir = 14;
-	localparam [3:0] PauseDr = 6;
-	localparam [3:0] PauseIr = 13;
-	localparam [3:0] RunTestIdle = 1;
-	localparam [3:0] SelectDrScan = 2;
-	localparam [3:0] SelectIrScan = 9;
-	localparam [3:0] ShiftDr = 4;
-	localparam [3:0] ShiftIr = 11;
-	localparam [3:0] TestLogicReset = 0;
-	localparam [3:0] UpdateDr = 8;
-	localparam [3:0] UpdateIr = 15;
-	always @(*) begin : p_tap_fsm
-		test_logic_reset_o = 1'b0;
-		capture_dr_o = 1'b0;
-		shift_dr_o = 1'b0;
-		update_dr_o = 1'b0;
-		capture_ir = 1'b0;
-		shift_ir = 1'b0;
-		update_ir = 1'b0;
-		case (tap_state_q)
-			TestLogicReset: begin
-				tap_state_d = (tms_i ? TestLogicReset : RunTestIdle);
-				test_logic_reset_o = 1'b1;
-			end
-			RunTestIdle: tap_state_d = (tms_i ? SelectDrScan : RunTestIdle);
-			SelectDrScan: tap_state_d = (tms_i ? SelectIrScan : CaptureDr);
-			CaptureDr: begin
-				capture_dr_o = 1'b1;
-				tap_state_d = (tms_i ? Exit1Dr : ShiftDr);
-			end
-			ShiftDr: begin
-				shift_dr_o = 1'b1;
-				tap_state_d = (tms_i ? Exit1Dr : ShiftDr);
-			end
-			Exit1Dr: tap_state_d = (tms_i ? UpdateDr : PauseDr);
-			PauseDr: tap_state_d = (tms_i ? Exit2Dr : PauseDr);
-			Exit2Dr: tap_state_d = (tms_i ? UpdateDr : ShiftDr);
-			UpdateDr: begin
-				update_dr_o = 1'b1;
-				tap_state_d = (tms_i ? SelectDrScan : RunTestIdle);
-			end
-			SelectIrScan: tap_state_d = (tms_i ? TestLogicReset : CaptureIr);
-			CaptureIr: begin
-				capture_ir = 1'b1;
-				tap_state_d = (tms_i ? Exit1Ir : ShiftIr);
-			end
-			ShiftIr: begin
-				shift_ir = 1'b1;
-				tap_state_d = (tms_i ? Exit1Ir : ShiftIr);
-			end
-			Exit1Ir: tap_state_d = (tms_i ? UpdateIr : PauseIr);
-			PauseIr: tap_state_d = (tms_i ? Exit2Ir : PauseIr);
-			Exit2Ir: tap_state_d = (tms_i ? UpdateIr : ShiftIr);
-			UpdateIr: begin
-				update_ir = 1'b1;
-				tap_state_d = (tms_i ? SelectDrScan : RunTestIdle);
-			end
-			default:
-				;
-		endcase
-	end
-	always @(posedge tck_i or negedge trst_ni) begin : p_regs
-		if (!trst_ni) begin
-			tap_state_q <= RunTestIdle;
-			idcode_q <= IdcodeValue;
-			bypass_q <= 1'b0;
-			dtmcs_q <= {32 {1'sb0}};
-		end
-		else begin
-			tap_state_q <= tap_state_d;
-			idcode_q <= idcode_d;
-			bypass_q <= bypass_d;
-			dtmcs_q <= dtmcs_d;
-		end
-	end
-endmodule
-module dm_mem (
-	clk_i,
-	rst_ni,
-	debug_req_o,
-	hartsel_i,
-	haltreq_i,
-	resumereq_i,
-	clear_resumeack_i,
-	halted_o,
-	resuming_o,
-	progbuf_i,
-	data_i,
-	data_o,
-	data_valid_o,
-	cmd_valid_i,
-	cmd_i,
-	cmderror_valid_o,
-	cmderror_o,
-	cmdbusy_o,
-	req_i,
-	we_i,
-	addr_i,
-	wdata_i,
-	be_i,
-	rdata_o
-);
-	parameter [31:0] NrHarts = 1;
-	parameter [31:0] BusWidth = 32;
-	parameter [NrHarts - 1:0] SelectableHarts = {NrHarts {1'b1}};
-	parameter [31:0] DmBaseAddress = 1'sb0;
-	input wire clk_i;
-	input wire rst_ni;
-	output wire [NrHarts - 1:0] debug_req_o;
-	input wire [19:0] hartsel_i;
-	input wire [NrHarts - 1:0] haltreq_i;
-	input wire [NrHarts - 1:0] resumereq_i;
-	input wire clear_resumeack_i;
-	output wire [NrHarts - 1:0] halted_o;
-	output wire [NrHarts - 1:0] resuming_o;
-	localparam [4:0] dm_ProgBufSize = 5'h08;
-	input wire [(dm_ProgBufSize * 32) - 1:0] progbuf_i;
-	localparam [3:0] dm_DataCount = 4'h2;
-	input wire [(dm_DataCount * 32) - 1:0] data_i;
-	output reg [(dm_DataCount * 32) - 1:0] data_o;
-	output reg data_valid_o;
-	input wire cmd_valid_i;
-	input wire [31:0] cmd_i;
-	output reg cmderror_valid_o;
-	output reg [2:0] cmderror_o;
-	output reg cmdbusy_o;
-	input wire req_i;
-	input wire we_i;
-	input wire [BusWidth - 1:0] addr_i;
-	input wire [BusWidth - 1:0] wdata_i;
-	input wire [(BusWidth / 8) - 1:0] be_i;
-	output wire [BusWidth - 1:0] rdata_o;
-	localparam [31:0] DbgAddressBits = 12;
-	localparam [31:0] HartSelLen = (NrHarts == 1 ? 1 : $clog2(NrHarts));
-	localparam [31:0] NrHartsAligned = 2 ** HartSelLen;
-	localparam [31:0] MaxAar = (BusWidth == 64 ? 4 : 3);
-	localparam [0:0] HasSndScratch = DmBaseAddress != 0;
-	localparam [4:0] LoadBaseAddr = (DmBaseAddress == 0 ? 5'd0 : 5'd10);
-	localparam [11:0] dm_DataAddr = 12'h380;
-	localparam [11:0] DataBaseAddr = dm_DataAddr;
-	localparam [11:0] DataEndAddr = (dm_DataAddr + (4 * dm_DataCount)) - 1;
-	localparam [11:0] ProgBufBaseAddr = dm_DataAddr - (4 * dm_ProgBufSize);
-	localparam [11:0] ProgBufEndAddr = dm_DataAddr - 1;
-	localparam [11:0] AbstractCmdBaseAddr = ProgBufBaseAddr - 40;
-	localparam [11:0] AbstractCmdEndAddr = ProgBufBaseAddr - 1;
-	localparam [11:0] WhereToAddr = 'h300;
-	localparam [11:0] FlagsBaseAddr = 'h400;
-	localparam [11:0] FlagsEndAddr = 'h7ff;
-	localparam [11:0] HaltedAddr = 'h100;
-	localparam [11:0] GoingAddr = 'h104;
-	localparam [11:0] ResumingAddr = 'h108;
-	localparam [11:0] ExceptionAddr = 'h10c;
-	wire [((dm_ProgBufSize / 2) * 64) - 1:0] progbuf;
-	reg [511:0] abstract_cmd;
-	wire [NrHarts - 1:0] halted_d;
-	reg [NrHarts - 1:0] halted_q;
-	wire [NrHarts - 1:0] resuming_d;
-	reg [NrHarts - 1:0] resuming_q;
-	reg resume;
-	reg go;
-	reg going;
-	reg exception;
-	reg unsupported_command;
-	wire [63:0] rom_rdata;
-	reg [63:0] rdata_d;
-	reg [63:0] rdata_q;
-	reg word_enable32_q;
-	wire [HartSelLen - 1:0] hartsel;
-	wire [HartSelLen - 1:0] wdata_hartsel;
-	assign hartsel = hartsel_i[HartSelLen - 1:0];
-	assign wdata_hartsel = wdata_i[HartSelLen - 1:0];
-	wire [NrHartsAligned - 1:0] resumereq_aligned;
-	wire [NrHartsAligned - 1:0] haltreq_aligned;
-	reg [NrHartsAligned - 1:0] halted_d_aligned;
-	wire [NrHartsAligned - 1:0] halted_q_aligned;
-	reg [NrHartsAligned - 1:0] halted_aligned;
-	wire [NrHartsAligned - 1:0] resumereq_wdata_aligned;
-	reg [NrHartsAligned - 1:0] resuming_d_aligned;
-	wire [NrHartsAligned - 1:0] resuming_q_aligned;
-	function automatic [NrHartsAligned - 1:0] sv2v_cast_C60B8;
-		input reg [NrHartsAligned - 1:0] inp;
-		sv2v_cast_C60B8 = inp;
-	endfunction
-	assign resumereq_aligned = sv2v_cast_C60B8(resumereq_i);
-	assign haltreq_aligned = sv2v_cast_C60B8(haltreq_i);
-	assign resumereq_wdata_aligned = sv2v_cast_C60B8(resumereq_i);
-	assign halted_q_aligned = sv2v_cast_C60B8(halted_q);
-	function automatic [NrHarts - 1:0] sv2v_cast_25FFB;
-		input reg [NrHarts - 1:0] inp;
-		sv2v_cast_25FFB = inp;
-	endfunction
-	assign halted_d = sv2v_cast_25FFB(halted_d_aligned);
-	assign resuming_q_aligned = sv2v_cast_C60B8(resuming_q);
-	assign resuming_d = sv2v_cast_25FFB(resuming_d_aligned);
-	wire fwd_rom_d;
-	reg fwd_rom_q;
-	wire [23:0] ac_ar;
-	function automatic [23:0] sv2v_cast_24;
-		input reg [23:0] inp;
-		sv2v_cast_24 = inp;
-	endfunction
-	assign ac_ar = sv2v_cast_24(cmd_i[23-:24]);
-	assign debug_req_o = haltreq_i;
-	assign halted_o = halted_q;
-	assign resuming_o = resuming_q;
-	assign progbuf = progbuf_i;
-	reg [1:0] state_d;
-	reg [1:0] state_q;
-	localparam [1:0] CmdExecuting = 3;
-	localparam [1:0] Go = 1;
-	localparam [1:0] Idle = 0;
-	localparam [1:0] Resume = 2;
-	localparam [2:0] dm_CmdErrNone = 0;
-	localparam [2:0] dm_CmdErrNotSupported = 2;
-	localparam [2:0] dm_CmdErrorException = 3;
-	localparam [2:0] dm_CmdErrorHaltResume = 4;
-	always @(*) begin : p_hart_ctrl_queue
-		cmderror_valid_o = 1'b0;
-		cmderror_o = dm_CmdErrNone;
-		state_d = state_q;
-		go = 1'b0;
-		resume = 1'b0;
-		cmdbusy_o = 1'b1;
-		case (state_q)
-			Idle: begin
-				cmdbusy_o = 1'b0;
-				if ((cmd_valid_i && halted_q_aligned[hartsel]) && !unsupported_command)
-					state_d = Go;
-				else if (cmd_valid_i) begin
-					cmderror_valid_o = 1'b1;
-					cmderror_o = dm_CmdErrorHaltResume;
-				end
-				if (((resumereq_aligned[hartsel] && !resuming_q_aligned[hartsel]) && !haltreq_aligned[hartsel]) && halted_q_aligned[hartsel])
-					state_d = Resume;
-			end
-			Go: begin
-				cmdbusy_o = 1'b1;
-				go = 1'b1;
-				if (going)
-					state_d = CmdExecuting;
-			end
-			Resume: begin
-				cmdbusy_o = 1'b1;
-				resume = 1'b1;
-				if (resuming_q_aligned[hartsel])
-					state_d = Idle;
-			end
-			CmdExecuting: begin
-				cmdbusy_o = 1'b1;
-				go = 1'b0;
-				if (halted_aligned[hartsel])
-					state_d = Idle;
-			end
-			default:
-				;
-		endcase
-		if (unsupported_command && cmd_valid_i) begin
-			cmderror_valid_o = 1'b1;
-			cmderror_o = dm_CmdErrNotSupported;
-		end
-		if (exception) begin
-			cmderror_valid_o = 1'b1;
-			cmderror_o = dm_CmdErrorException;
-		end
-	end
-	wire [63:0] word_mux;
-	assign word_mux = (fwd_rom_q ? rom_rdata : rdata_q);
-	generate
-		if (BusWidth == 64) begin : gen_word_mux64
-			assign rdata_o = word_mux;
-		end
-		else begin : gen_word_mux32
-			assign rdata_o = (word_enable32_q ? word_mux[32+:32] : word_mux[0+:32]);
-		end
-	endgenerate
-	reg [63:0] data_bits;
-	reg [63:0] rdata;
-	localparam [63:0] dm_HaltAddress = 64'h0000000000000800;
-	localparam [63:0] dm_ResumeAddress = dm_HaltAddress + 4;
-	function automatic [31:0] dm_jal;
-		input reg [4:0] rd;
-		input reg [20:0] imm;
-		dm_jal = {imm[20], imm[10:1], imm[11], imm[19:12], rd, 7'h6f};
-	endfunction
-	localparam [7:0] dm_AccessRegister = 8'h00;
-	function automatic [20:0] sv2v_cast_21;
-		input reg [20:0] inp;
-		sv2v_cast_21 = inp;
-	endfunction
-	function automatic [$clog2(5'h08) - 1:0] sv2v_cast_2F779;
-		input reg [$clog2(5'h08) - 1:0] inp;
-		sv2v_cast_2F779 = inp;
-	endfunction
-	function automatic [2:0] sv2v_cast_3;
-		input reg [2:0] inp;
-		sv2v_cast_3 = inp;
-	endfunction
-	function automatic [11:0] sv2v_cast_9D1F2;
-		input reg [11:0] inp;
-		sv2v_cast_9D1F2 = inp;
-	endfunction
-	always @(*) begin : p_rw_logic
-		halted_d_aligned = sv2v_cast_C60B8(halted_q);
-		resuming_d_aligned = sv2v_cast_C60B8(resuming_q);
-		rdata_d = rdata_q;
-		data_bits = data_i;
-		rdata = {64 {1'sb0}};
-		data_valid_o = 1'b0;
-		exception = 1'b0;
-		halted_aligned = {NrHartsAligned {1'sb0}};
-		going = 1'b0;
-		if (clear_resumeack_i)
-			resuming_d_aligned[hartsel] = 1'b0;
-		if (req_i)
-			if (we_i) begin
-				if (addr_i[11:0] == HaltedAddr) begin
-					halted_aligned[wdata_hartsel] = 1'b1;
-					halted_d_aligned[wdata_hartsel] = 1'b1;
-				end
-				else if (addr_i[11:0] == GoingAddr)
-					going = 1'b1;
-				else if (addr_i[11:0] == ResumingAddr) begin
-					halted_d_aligned[wdata_hartsel] = 1'b0;
-					resuming_d_aligned[wdata_hartsel] = 1'b1;
-				end
-				else if (addr_i[11:0] == ExceptionAddr)
-					exception = 1'b1;
-				else if ((DataBaseAddr <= addr_i[11:0]) && (DataEndAddr >= addr_i[11:0])) begin
-					data_valid_o = 1'b1;
-					begin : sv2v_autoblock_103
-						reg signed [31:0] i;
-						for (i = 0; i < (BusWidth / 8); i = i + 1)
-							if (be_i[i])
-								data_bits[i * 8+:8] = wdata_i[i * 8+:8];
-					end
-				end
-			end
-			else if (addr_i[11:0] == WhereToAddr) begin
-				if (resumereq_wdata_aligned[wdata_hartsel])
-					rdata_d = {32'b00000000000000000000000000000000, dm_jal(1'sb0, sv2v_cast_21(dm_ResumeAddress[11:0]) - sv2v_cast_21(WhereToAddr))};
-				if (cmdbusy_o)
-					if (((cmd_i[31-:8] == dm_AccessRegister) && !ac_ar[17]) && ac_ar[18])
-						rdata_d = {32'b00000000000000000000000000000000, dm_jal(1'sb0, sv2v_cast_21(ProgBufBaseAddr) - sv2v_cast_21(WhereToAddr))};
-					else
-						rdata_d = {32'b00000000000000000000000000000000, dm_jal(1'sb0, sv2v_cast_21(AbstractCmdBaseAddr) - sv2v_cast_21(WhereToAddr))};
-			end
-			else if ((DataBaseAddr <= addr_i[11:0]) && (DataEndAddr >= addr_i[11:0]))
-				rdata_d = {data_i[sv2v_cast_2F779((addr_i[11:3] - DataBaseAddr[11:3]) + 1'b1) * 32+:32], data_i[sv2v_cast_2F779(addr_i[11:3] - DataBaseAddr[11:3]) * 32+:32]};
-			else if ((ProgBufBaseAddr <= addr_i[11:0]) && (ProgBufEndAddr >= addr_i[11:0]))
-				rdata_d = progbuf[sv2v_cast_2F779(addr_i[11:3] - ProgBufBaseAddr[11:3]) * 64+:64];
-			else if ((AbstractCmdBaseAddr <= addr_i[11:0]) && (AbstractCmdEndAddr >= addr_i[11:0]))
-				rdata_d = abstract_cmd[sv2v_cast_3(addr_i[11:3] - AbstractCmdBaseAddr[11:3]) * 64+:64];
-			else if ((FlagsBaseAddr <= addr_i[11:0]) && (FlagsEndAddr >= addr_i[11:0])) begin
-				if (({addr_i[11:3], 3'b000} - FlagsBaseAddr[11:0]) == (sv2v_cast_9D1F2(hartsel) & {{9 {1'b1}}, 3'b000}))
-					rdata[(sv2v_cast_9D1F2(hartsel) & sv2v_cast_9D1F2(3'b111)) * 8+:8] = {6'b000000, resume, go};
-				rdata_d = rdata;
-			end
-		data_o = data_bits;
-	end
-	function automatic [31:0] dm_auipc;
-		input reg [4:0] rd;
-		input reg [20:0] imm;
-		dm_auipc = {imm[20], imm[10:1], imm[11], imm[19:12], rd, 7'h17};
-	endfunction
-	function automatic [31:0] dm_csrr;
-		input reg [11:0] csr;
-		input reg [4:0] dest;
-		dm_csrr = {csr, 5'h00, 3'h2, dest, 7'h73};
-	endfunction
-	function automatic [31:0] dm_csrw;
-		input reg [11:0] csr;
-		input reg [4:0] rs1;
-		dm_csrw = {csr, rs1, 3'h1, 5'h00, 7'h73};
-	endfunction
-	function automatic [31:0] dm_ebreak;
-		input reg _sv2v_unused;
-		dm_ebreak = 32'h00100073;
-	endfunction
-	function automatic [31:0] dm_float_load;
-		input reg [2:0] size;
-		input reg [4:0] dest;
-		input reg [4:0] base;
-		input reg [11:0] offset;
-		dm_float_load = {offset[11:0], base, size, dest, 7'b0000111};
-	endfunction
-	function automatic [31:0] dm_float_store;
-		input reg [2:0] size;
-		input reg [4:0] src;
-		input reg [4:0] base;
-		input reg [11:0] offset;
-		dm_float_store = {offset[11:5], src, base, size, offset[4:0], 7'b0100111};
-	endfunction
-	function automatic [31:0] dm_illegal;
-		input reg _sv2v_unused;
-		dm_illegal = 32'h00000000;
-	endfunction
-	function automatic [31:0] dm_load;
-		input reg [2:0] size;
-		input reg [4:0] dest;
-		input reg [4:0] base;
-		input reg [11:0] offset;
-		dm_load = {offset[11:0], base, size, dest, 7'h03};
-	endfunction
-	function automatic [31:0] dm_nop;
-		input reg _sv2v_unused;
-		dm_nop = 32'h00000013;
-	endfunction
-	function automatic [31:0] dm_slli;
-		input reg [4:0] rd;
-		input reg [4:0] rs1;
-		input reg [5:0] shamt;
-		dm_slli = {6'b000000, shamt[5:0], rs1, 3'h1, rd, 7'h13};
-	endfunction
-	function automatic [31:0] dm_srli;
-		input reg [4:0] rd;
-		input reg [4:0] rs1;
-		input reg [5:0] shamt;
-		dm_srli = {6'b000000, shamt[5:0], rs1, 3'h5, rd, 7'h13};
-	endfunction
-	function automatic [31:0] dm_store;
-		input reg [2:0] size;
-		input reg [4:0] src;
-		input reg [4:0] base;
-		input reg [11:0] offset;
-		dm_store = {offset[11:5], src, base, size, offset[4:0], 7'h23};
-	endfunction
-	localparam [11:0] dm_CSR_DSCRATCH0 = 12'h7b2;
-	localparam [11:0] dm_CSR_DSCRATCH1 = 12'h7b3;
-	function automatic [31:0] sv2v_cast_32;
-		input reg [31:0] inp;
-		sv2v_cast_32 = inp;
-	endfunction
-	always @(*) begin : p_abstract_cmd_rom
-		unsupported_command = 1'b0;
-		abstract_cmd[31-:32] = dm_illegal(0);
-		abstract_cmd[63-:32] = (HasSndScratch ? dm_auipc(5'd10, 1'sb0) : dm_nop(0));
-		abstract_cmd[95-:32] = (HasSndScratch ? dm_srli(5'd10, 5'd10, 6'd12) : dm_nop(0));
-		abstract_cmd[127-:32] = (HasSndScratch ? dm_slli(5'd10, 5'd10, 6'd12) : dm_nop(0));
-		abstract_cmd[159-:32] = dm_nop(0);
-		abstract_cmd[191-:32] = dm_nop(0);
-		abstract_cmd[223-:32] = dm_nop(0);
-		abstract_cmd[255-:32] = dm_nop(0);
-		abstract_cmd[287-:32] = (HasSndScratch ? dm_csrr(dm_CSR_DSCRATCH1, 5'd10) : dm_nop(0));
-		abstract_cmd[319-:32] = dm_ebreak(0);
-		abstract_cmd[320+:192] = {192 {1'sb0}};
-		case (cmd_i[31-:8])
-			dm_AccessRegister: begin
-				if (((sv2v_cast_32(ac_ar[22-:3]) < MaxAar) && ac_ar[17]) && ac_ar[16]) begin
-					abstract_cmd[31-:32] = (HasSndScratch ? dm_csrw(dm_CSR_DSCRATCH1, 5'd10) : dm_nop(0));
-					if (ac_ar[15:14] != {2 {1'sb0}}) begin
-						abstract_cmd[31-:32] = dm_ebreak(0);
-						unsupported_command = 1'b1;
-					end
-					else if (((HasSndScratch && ac_ar[12]) && !ac_ar[5]) && (ac_ar[4:0] == 5'd10)) begin
-						abstract_cmd[159-:32] = dm_csrw(dm_CSR_DSCRATCH0, 5'd8);
-						abstract_cmd[191-:32] = dm_load(ac_ar[22-:3], 5'd8, LoadBaseAddr, dm_DataAddr);
-						abstract_cmd[223-:32] = dm_csrw(dm_CSR_DSCRATCH1, 5'd8);
-						abstract_cmd[255-:32] = dm_csrr(dm_CSR_DSCRATCH0, 5'd8);
-					end
-					else if (ac_ar[12]) begin
-						if (ac_ar[5])
-							abstract_cmd[159-:32] = dm_float_load(ac_ar[22-:3], ac_ar[4:0], LoadBaseAddr, dm_DataAddr);
-						else
-							abstract_cmd[159-:32] = dm_load(ac_ar[22-:3], ac_ar[4:0], LoadBaseAddr, dm_DataAddr);
-					end
-					else begin
-						abstract_cmd[159-:32] = dm_csrw(dm_CSR_DSCRATCH0, 5'd8);
-						abstract_cmd[191-:32] = dm_load(ac_ar[22-:3], 5'd8, LoadBaseAddr, dm_DataAddr);
-						abstract_cmd[223-:32] = dm_csrw(ac_ar[11:0], 5'd8);
-						abstract_cmd[255-:32] = dm_csrr(dm_CSR_DSCRATCH0, 5'd8);
-					end
-				end
-				else if (((sv2v_cast_32(ac_ar[22-:3]) < MaxAar) && ac_ar[17]) && !ac_ar[16]) begin
-					abstract_cmd[31-:32] = (HasSndScratch ? dm_csrw(dm_CSR_DSCRATCH1, LoadBaseAddr) : dm_nop(0));
-					if (ac_ar[15:14] != {2 {1'sb0}}) begin
-						abstract_cmd[31-:32] = dm_ebreak(0);
-						unsupported_command = 1'b1;
-					end
-					else if (((HasSndScratch && ac_ar[12]) && !ac_ar[5]) && (ac_ar[4:0] == 5'd10)) begin
-						abstract_cmd[159-:32] = dm_csrw(dm_CSR_DSCRATCH0, 5'd8);
-						abstract_cmd[191-:32] = dm_csrr(dm_CSR_DSCRATCH1, 5'd8);
-						abstract_cmd[223-:32] = dm_store(ac_ar[22-:3], 5'd8, LoadBaseAddr, dm_DataAddr);
-						abstract_cmd[255-:32] = dm_csrr(dm_CSR_DSCRATCH0, 5'd8);
-					end
-					else if (ac_ar[12]) begin
-						if (ac_ar[5])
-							abstract_cmd[159-:32] = dm_float_store(ac_ar[22-:3], ac_ar[4:0], LoadBaseAddr, dm_DataAddr);
-						else
-							abstract_cmd[159-:32] = dm_store(ac_ar[22-:3], ac_ar[4:0], LoadBaseAddr, dm_DataAddr);
-					end
-					else begin
-						abstract_cmd[159-:32] = dm_csrw(dm_CSR_DSCRATCH0, 5'd8);
-						abstract_cmd[191-:32] = dm_csrr(ac_ar[11:0], 5'd8);
-						abstract_cmd[223-:32] = dm_store(ac_ar[22-:3], 5'd8, LoadBaseAddr, dm_DataAddr);
-						abstract_cmd[255-:32] = dm_csrr(dm_CSR_DSCRATCH0, 5'd8);
-					end
-				end
-				else if ((sv2v_cast_32(ac_ar[22-:3]) >= MaxAar) || (ac_ar[19] == 1'b1)) begin
-					abstract_cmd[31-:32] = dm_ebreak(0);
-					unsupported_command = 1'b1;
-				end
-				if (ac_ar[18] && !unsupported_command)
-					abstract_cmd[319-:32] = dm_nop(0);
-			end
-			default: begin
-				abstract_cmd[31-:32] = dm_ebreak(0);
-				unsupported_command = 1'b1;
-			end
-		endcase
-	end
-	wire [63:0] rom_addr;
-	function automatic [63:0] sv2v_cast_64;
-		input reg [63:0] inp;
-		sv2v_cast_64 = inp;
-	endfunction
-	assign rom_addr = sv2v_cast_64(addr_i);
-	generate
-		if (HasSndScratch) begin : gen_rom_snd_scratch
-			debug_rom i_debug_rom(
-				.clk_i(clk_i),
-				.req_i(req_i),
-				.addr_i(rom_addr),
-				.rdata_o(rom_rdata)
-			);
-		end
-		else begin : gen_rom_one_scratch
-			debug_rom_one_scratch i_debug_rom(
-				.clk_i(clk_i),
-				.req_i(req_i),
-				.addr_i(rom_addr),
-				.rdata_o(rom_rdata)
-			);
-		end
-	endgenerate
-	assign fwd_rom_d = addr_i[11:0] >= dm_HaltAddress[11:0];
-	always @(posedge clk_i or negedge rst_ni) begin : p_regs
-		if (!rst_ni) begin
-			fwd_rom_q <= 1'b0;
-			rdata_q <= {64 {1'sb0}};
-			state_q <= Idle;
-			word_enable32_q <= 1'b0;
-		end
-		else begin
-			fwd_rom_q <= fwd_rom_d;
-			rdata_q <= rdata_d;
-			state_q <= state_d;
-			word_enable32_q <= addr_i[2];
-		end
-	end
-	always @(posedge clk_i or negedge rst_ni)
-		if (!rst_ni) begin
-			halted_q <= 1'b0;
-			resuming_q <= 1'b0;
-		end
-		else begin
-			halted_q <= SelectableHarts & halted_d;
-			resuming_q <= SelectableHarts & resuming_d;
-		end
-endmodule
-module dm_sba (
-	clk_i,
-	rst_ni,
-	dmactive_i,
-	master_req_o,
-	master_add_o,
-	master_we_o,
-	master_wdata_o,
-	master_be_o,
-	master_gnt_i,
-	master_r_valid_i,
-	master_r_rdata_i,
-	sbaddress_i,
-	sbaddress_write_valid_i,
-	sbreadonaddr_i,
-	sbaddress_o,
-	sbautoincrement_i,
-	sbaccess_i,
-	sbreadondata_i,
-	sbdata_i,
-	sbdata_read_valid_i,
-	sbdata_write_valid_i,
-	sbdata_o,
-	sbdata_valid_o,
-	sbbusy_o,
-	sberror_valid_o,
-	sberror_o
-);
-	parameter [31:0] BusWidth = 32;
-	parameter [0:0] ReadByteEnable = 1;
-	input wire clk_i;
-	input wire rst_ni;
-	input wire dmactive_i;
-	output wire master_req_o;
-	output wire [BusWidth - 1:0] master_add_o;
-	output wire master_we_o;
-	output wire [BusWidth - 1:0] master_wdata_o;
-	output wire [(BusWidth / 8) - 1:0] master_be_o;
-	input wire master_gnt_i;
-	input wire master_r_valid_i;
-	input wire [BusWidth - 1:0] master_r_rdata_i;
-	input wire [BusWidth - 1:0] sbaddress_i;
-	input wire sbaddress_write_valid_i;
-	input wire sbreadonaddr_i;
-	output reg [BusWidth - 1:0] sbaddress_o;
-	input wire sbautoincrement_i;
-	input wire [2:0] sbaccess_i;
-	input wire sbreadondata_i;
-	input wire [BusWidth - 1:0] sbdata_i;
-	input wire sbdata_read_valid_i;
-	input wire sbdata_write_valid_i;
-	output wire [BusWidth - 1:0] sbdata_o;
-	output wire sbdata_valid_o;
-	output wire sbbusy_o;
-	output reg sberror_valid_o;
-	output reg [2:0] sberror_o;
-	reg [2:0] state_d;
-	reg [2:0] state_q;
-	reg [BusWidth - 1:0] address;
-	reg req;
-	wire gnt;
-	reg we;
-	reg [(BusWidth / 8) - 1:0] be;
-	reg [(BusWidth / 8) - 1:0] be_mask;
-	reg [$clog2(BusWidth / 8) - 1:0] be_idx;
-	localparam [2:0] dm_Idle = 0;
-	assign sbbusy_o = state_q != dm_Idle;
-	function automatic signed [31:0] sv2v_cast_32_signed;
-		input reg signed [31:0] inp;
-		sv2v_cast_32_signed = inp;
-	endfunction
-	always @(*) begin : p_be_mask
-		be_mask = {BusWidth / 8 {1'sb0}};
-		case (sbaccess_i)
-			3'b000: be_mask[be_idx] = 1'b1;
-			3'b001: be_mask[sv2v_cast_32_signed({be_idx[$clog2(BusWidth / 8) - 1:1], 1'b0})+:2] = {2 {1'sb1}};
-			3'b010:
-				if (BusWidth == 32'd64)
-					be_mask[sv2v_cast_32_signed({be_idx[$clog2(BusWidth / 8) - 1], 2'h0})+:4] = {4 {1'sb1}};
-				else
-					be_mask = {BusWidth / 8 {1'sb1}};
-			3'b011: be_mask = {BusWidth / 8 {1'sb1}};
-			default:
-				;
-		endcase
-	end
-	localparam [2:0] dm_Read = 1;
-	localparam [2:0] dm_WaitRead = 3;
-	localparam [2:0] dm_WaitWrite = 4;
-	localparam [2:0] dm_Write = 2;
-	always @(*) begin : p_fsm
-		req = 1'b0;
-		address = sbaddress_i;
-		we = 1'b0;
-		be = {BusWidth / 8 {1'sb0}};
-		be_idx = sbaddress_i[$clog2(BusWidth / 8) - 1:0];
-		sberror_o = {3 {1'sb0}};
-		sberror_valid_o = 1'b0;
-		sbaddress_o = sbaddress_i;
-		state_d = state_q;
-		case (state_q)
-			dm_Idle: begin
-				if (sbaddress_write_valid_i && sbreadonaddr_i)
-					state_d = dm_Read;
-				if (sbdata_write_valid_i)
-					state_d = dm_Write;
-				if (sbdata_read_valid_i && sbreadondata_i)
-					state_d = dm_Read;
-			end
-			dm_Read: begin
-				req = 1'b1;
-				if (ReadByteEnable)
-					be = be_mask;
-				if (gnt)
-					state_d = dm_WaitRead;
-			end
-			dm_Write: begin
-				req = 1'b1;
-				we = 1'b1;
-				be = be_mask;
-				if (gnt)
-					state_d = dm_WaitWrite;
-			end
-			dm_WaitRead:
-				if (sbdata_valid_o) begin
-					state_d = dm_Idle;
-					if (sbautoincrement_i)
-						sbaddress_o = sbaddress_i + (32'h00000001 << sbaccess_i);
-				end
-			dm_WaitWrite:
-				if (sbdata_valid_o) begin
-					state_d = dm_Idle;
-					if (sbautoincrement_i)
-						sbaddress_o = sbaddress_i + (32'h00000001 << sbaccess_i);
-				end
-			default: state_d = dm_Idle;
-		endcase
-		if ((sbaccess_i > 3) && (state_q != dm_Idle)) begin
-			req = 1'b0;
-			state_d = dm_Idle;
-			sberror_valid_o = 1'b1;
-			sberror_o = 3'd3;
-		end
-	end
-	always @(posedge clk_i or negedge rst_ni) begin : p_regs
-		if (!rst_ni)
-			state_q <= dm_Idle;
-		else
-			state_q <= state_d;
-	end
-	assign master_req_o = req;
-	assign master_add_o = address[BusWidth - 1:0];
-	assign master_we_o = we;
-	assign master_wdata_o = sbdata_i[BusWidth - 1:0];
-	assign master_be_o = be[(BusWidth / 8) - 1:0];
-	assign gnt = master_gnt_i;
-	assign sbdata_valid_o = master_r_valid_i;
-	assign sbdata_o = master_r_rdata_i[BusWidth - 1:0];
-endmodule
 module fifo_async (
 	clk_wr_i,
 	rst_wr_ni,
@@ -12736,7 +11079,7 @@ module fifo_async (
 	assign fifo_incr_rptr = rvalid_o & rready_i;
 	always @(posedge clk_wr_i or negedge rst_wr_ni)
 		if (!rst_wr_ni)
-			fifo_wptr <= {PTR_WIDTH {1'b0}};
+			fifo_wptr <= {PTR_WIDTH {1'sb0}};
 		else if (fifo_incr_wptr)
 			if (fifo_wptr[PTR_WIDTH - 2:0] == DepthMinus1)
 				fifo_wptr <= {~fifo_wptr[PTR_WIDTH - 1], {PTR_WIDTH - 1 {1'b0}}};
@@ -12759,7 +11102,7 @@ module fifo_async (
 	endfunction
 	always @(posedge clk_wr_i or negedge rst_wr_ni)
 		if (!rst_wr_ni)
-			fifo_wptr_gray <= {PTR_WIDTH {1'b0}};
+			fifo_wptr_gray <= {PTR_WIDTH {1'sb0}};
 		else if (fifo_incr_wptr)
 			if (fifo_wptr[PTR_WIDTH - 2:0] == DepthMinus1)
 				fifo_wptr_gray <= dec2gray({~fifo_wptr[PTR_WIDTH - 1], {PTR_WIDTH - 1 {1'b0}}});
@@ -12782,7 +11125,7 @@ module fifo_async (
 		reg unused_decsub_msb;
 		begin
 			dec_tmp[PTR_WIDTH - 2] = grayval[PTR_WIDTH - 2];
-			begin : sv2v_autoblock_104
+			begin : sv2v_autoblock_106
 				reg signed [31:0] i;
 				for (i = PTR_WIDTH - 3; i >= 0; i = i - 1)
 					dec_tmp[i] = dec_tmp[i + 1] ^ grayval[i];
@@ -12797,7 +11140,7 @@ module fifo_async (
 	assign fifo_wptr_sync_combi = gray2dec(fifo_wptr_gray_sync);
 	always @(posedge clk_rd_i or negedge rst_rd_ni)
 		if (!rst_rd_ni)
-			fifo_rptr <= {PTR_WIDTH {1'b0}};
+			fifo_rptr <= {PTR_WIDTH {1'sb0}};
 		else if (fifo_incr_rptr)
 			if (fifo_rptr[PTR_WIDTH - 2:0] == DepthMinus1)
 				fifo_rptr <= {~fifo_rptr[PTR_WIDTH - 1], {PTR_WIDTH - 1 {1'b0}}};
@@ -12805,7 +11148,7 @@ module fifo_async (
 				fifo_rptr <= fifo_rptr + {{PTR_WIDTH - 1 {1'b0}}, 1'b1};
 	always @(posedge clk_rd_i or negedge rst_rd_ni)
 		if (!rst_rd_ni)
-			fifo_rptr_gray <= {PTR_WIDTH {1'b0}};
+			fifo_rptr_gray <= {PTR_WIDTH {1'sb0}};
 		else if (fifo_incr_rptr)
 			if (fifo_rptr[PTR_WIDTH - 2:0] == DepthMinus1)
 				fifo_rptr_gray <= dec2gray({~fifo_rptr[PTR_WIDTH - 1], {PTR_WIDTH - 1 {1'b0}}});
@@ -12819,7 +11162,7 @@ module fifo_async (
 	);
 	always @(posedge clk_wr_i or negedge rst_wr_ni)
 		if (!rst_wr_ni)
-			fifo_rptr_sync <= {PTR_WIDTH {1'b0}};
+			fifo_rptr_sync <= {PTR_WIDTH {1'sb0}};
 		else
 			fifo_rptr_sync <= gray2dec(fifo_rptr_gray_sync);
 	assign full_wclk = fifo_wptr == (fifo_rptr_sync ^ {1'b1, {PTR_WIDTH - 1 {1'b0}}});
@@ -12849,7 +11192,9 @@ module fifo_async (
 	assign rdepth_o = (full_rclk ? sv2v_cast_703F8(Depth) : (wptr_sync_msb == rptr_msb ? sv2v_cast_703F8(wptr_sync_value) - sv2v_cast_703F8(rptr_value) : (sv2v_cast_703F8(Depth) - sv2v_cast_703F8(rptr_value)) + sv2v_cast_703F8(wptr_sync_value)));
 	reg [Width - 1:0] storage [0:Depth - 1];
 	always @(posedge clk_wr_i)
-		if (fifo_incr_wptr)
+		if (~rst_wr_ni)
+			storage[fifo_wptr[PTR_WIDTH - 2:0]] <= {Width {1'sb0}};
+		else if (fifo_incr_wptr)
 			storage[fifo_wptr[PTR_WIDTH - 2:0]] <= wdata_i;
 	assign rdata_o = storage[fifo_rptr[PTR_WIDTH - 2:0]];
 endmodule
@@ -12932,10 +11277,10 @@ module fifo_sync (
 			assign rvalid_o = ~empty & ~under_rst;
 			always @(posedge clk_i or negedge rst_ni)
 				if (!rst_ni)
-					fifo_wptr <= {PTR_WIDTH {1'b0}};
+					fifo_wptr <= {PTR_WIDTH {1'sb0}};
 				else if (clr_i)
 					fifo_wptr <= {PTR_WIDTH {1'b0}};
-				else if (fifo_incr_wptr) begin : sv2v_autoblock_105
+				else if (fifo_incr_wptr) begin : sv2v_autoblock_107
 					reg [((PTR_WIDTH - 2) >= 0 ? PTR_WIDTH - 1 : 3 - PTR_WIDTH) - 1:0] sv2v_tmp_cast;
 					sv2v_tmp_cast = Depth - 1;
 					if (fifo_wptr[PTR_WIDTH - 2:0] == sv2v_tmp_cast)
@@ -12945,10 +11290,10 @@ module fifo_sync (
 				end
 			always @(posedge clk_i or negedge rst_ni)
 				if (!rst_ni)
-					fifo_rptr <= {PTR_WIDTH {1'b0}};
+					fifo_rptr <= {PTR_WIDTH {1'sb0}};
 				else if (clr_i)
 					fifo_rptr <= {PTR_WIDTH {1'b0}};
-				else if (fifo_incr_rptr) begin : sv2v_autoblock_106
+				else if (fifo_incr_rptr) begin : sv2v_autoblock_108
 					reg [((PTR_WIDTH - 2) >= 0 ? PTR_WIDTH - 1 : 3 - PTR_WIDTH) - 1:0] sv2v_tmp_cast_1;
 					sv2v_tmp_cast_1 = Depth - 1;
 					if (fifo_rptr[PTR_WIDTH - 2:0] == sv2v_tmp_cast_1)
@@ -12963,13 +11308,17 @@ module fifo_sync (
 			if (Depth == 1) begin : gen_depth_eq1
 				assign storage_rdata = storage[0+:Width];
 				always @(posedge clk_i)
-					if (fifo_incr_wptr)
+					if (~rst_ni)
+						storage[0+:Width] <= {Width {1'sb0}};
+					else if (fifo_incr_wptr)
 						storage[0+:Width] <= wdata_i;
 			end
 			else begin : gen_depth_gt1
 				assign storage_rdata = storage[fifo_rptr[PTR_WIDTH - 2:0] * Width+:Width];
 				always @(posedge clk_i)
-					if (fifo_incr_wptr)
+					if (~rst_ni)
+						storage[fifo_wptr[PTR_WIDTH - 2:0] * Width+:Width] <= {Width {1'sb0}};
+					else if (fifo_incr_wptr)
 						storage[fifo_wptr[PTR_WIDTH - 2:0] * Width+:Width] <= wdata_i;
 			end
 			wire [Width - 1:0] rdata_int;
@@ -13016,34 +11365,34 @@ module fpnew_cast_multi_8A35C_87530 (
 	busy_o
 );
 	parameter [31:0] AuxType_AUX_BITS = 0;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	parameter [0:0] FpFmtConfig = 1'sb1;
-	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 1;
-	parameter [0:0] IntFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	parameter [0:3] IntFmtConfig = 1'sb1;
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	function automatic signed [31:0] fpnew_pkg_maximum;
 		input reg signed [31:0] a;
 		input reg signed [31:0] b;
 		fpnew_pkg_maximum = (a > b ? a : b);
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_9359B;
+		input reg [1:0] inp;
 		sv2v_cast_9359B = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_fp_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_107
+			begin : sv2v_autoblock_109
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (cfg[i])
@@ -13052,24 +11401,30 @@ module fpnew_cast_multi_8A35C_87530 (
 			fpnew_pkg_max_fp_width = res;
 		end
 	endfunction
-	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 0;
-	localparam [fpnew_pkg_INT_FORMAT_BITS - 1:0] fpnew_pkg_INT32 = 0;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	localparam [1:0] fpnew_pkg_INT16 = 1;
+	localparam [1:0] fpnew_pkg_INT32 = 2;
+	localparam [1:0] fpnew_pkg_INT64 = 3;
+	localparam [1:0] fpnew_pkg_INT8 = 0;
 	function automatic [31:0] fpnew_pkg_int_width;
-		input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] ifmt;
+		input reg [1:0] ifmt;
 		case (ifmt)
+			fpnew_pkg_INT8: fpnew_pkg_int_width = 8;
+			fpnew_pkg_INT16: fpnew_pkg_int_width = 16;
 			fpnew_pkg_INT32: fpnew_pkg_int_width = 32;
+			fpnew_pkg_INT64: fpnew_pkg_int_width = 64;
 		endcase
 	endfunction
-	function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_D812A;
-		input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_D812A;
+		input reg [1:0] inp;
 		sv2v_cast_D812A = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_int_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_108
+			begin : sv2v_autoblock_110
 				reg signed [31:0] ifmt;
 				for (ifmt = 0; ifmt < fpnew_pkg_NUM_INT_FORMATS; ifmt = ifmt + 1)
 					if (cfg[ifmt])
@@ -13083,14 +11438,14 @@ module fpnew_cast_multi_8A35C_87530 (
 	input wire clk_i;
 	input wire rst_ni;
 	input wire [WIDTH - 1:0] operands_i;
-	input wire [0:0] is_boxed_i;
+	input wire [3:0] is_boxed_i;
 	input wire [2:0] rnd_mode_i;
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
 	input wire op_mod_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
-	input wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_i;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
+	input wire [1:0] int_fmt_i;
 	input wire tag_i;
 	input wire [AuxType_AUX_BITS - 1:0] aux_i;
 	input wire in_valid_i;
@@ -13117,19 +11472,19 @@ module fpnew_cast_multi_8A35C_87530 (
 	localparam [31:0] NUM_INT_FORMATS = fpnew_pkg_NUM_INT_FORMATS;
 	localparam [31:0] MAX_INT_WIDTH = fpnew_pkg_max_int_width(IntFmtConfig);
 	function automatic [31:0] fpnew_pkg_exp_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32];
 	endfunction
 	function automatic [31:0] fpnew_pkg_man_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32];
 	endfunction
 	function automatic [63:0] fpnew_pkg_super_format;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [63:0] res;
 		begin
 			res = {64 {1'sb0}};
-			begin : sv2v_autoblock_109
+			begin : sv2v_autoblock_111
 				reg [31:0] fmt;
 				for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
 					if (cfg[fmt]) begin
@@ -13154,19 +11509,19 @@ module fpnew_cast_multi_8A35C_87530 (
 	localparam [1:0] fpnew_pkg_AFTER = 1;
 	localparam NUM_OUT_REGS = (PipeConfig == fpnew_pkg_AFTER ? NumPipeRegs : (PipeConfig == fpnew_pkg_DISTRIBUTED ? NumPipeRegs / 3 : 0));
 	wire [WIDTH - 1:0] operands_q;
-	wire [0:0] is_boxed_q;
+	wire [3:0] is_boxed_q;
 	wire op_mod_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_q;
-	wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_q;
+	wire [1:0] src_fmt_q;
+	wire [1:0] dst_fmt_q;
+	wire [1:0] int_fmt_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * WIDTH) + ((NUM_INP_REGS * WIDTH) - 1) : ((NUM_INP_REGS + 1) * WIDTH) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * WIDTH : 0)] inp_pipe_operands_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0)] inp_pipe_is_boxed_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0)] inp_pipe_rnd_mode_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_OP_BITS) + ((NUM_INP_REGS * fpnew_pkg_OP_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_OP_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_OP_BITS : 0)] inp_pipe_op_q;
 	wire [0:NUM_INP_REGS] inp_pipe_op_mod_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_src_fmt_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_dst_fmt_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_int_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] inp_pipe_src_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] inp_pipe_dst_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_INT_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_INT_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_INT_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_INT_FORMAT_BITS : 0)] inp_pipe_int_fmt_q;
 	wire [0:NUM_INP_REGS] inp_pipe_tag_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * AuxType_AUX_BITS) + ((NUM_INP_REGS * AuxType_AUX_BITS) - 1) : ((NUM_INP_REGS + 1) * AuxType_AUX_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * AuxType_AUX_BITS : 0)] inp_pipe_aux_q;
 	wire [0:NUM_INP_REGS] inp_pipe_valid_q;
@@ -13176,9 +11531,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	assign inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3+:3] = rnd_mode_i;
 	assign inp_pipe_op_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_OP_BITS+:fpnew_pkg_OP_BITS] = op_i;
 	assign inp_pipe_op_mod_q[0] = op_mod_i;
-	assign inp_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_i;
-	assign inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
-	assign inp_pipe_int_fmt_q[0+:fpnew_pkg_INT_FORMAT_BITS] = int_fmt_i;
+	assign inp_pipe_src_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_i;
+	assign inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
+	assign inp_pipe_int_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_INT_FORMAT_BITS+:fpnew_pkg_INT_FORMAT_BITS] = int_fmt_i;
 	assign inp_pipe_tag_q[0] = tag_i;
 	assign inp_pipe_aux_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * AuxType_AUX_BITS+:AuxType_AUX_BITS] = aux_i;
 	assign inp_pipe_valid_q[0] = in_valid_i;
@@ -13194,9 +11549,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	assign operands_q = inp_pipe_operands_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * WIDTH+:WIDTH];
 	assign is_boxed_q = inp_pipe_is_boxed_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * NUM_FORMATS+:NUM_FORMATS];
 	assign op_mod_q = inp_pipe_op_mod_q[NUM_INP_REGS];
-	assign src_fmt_q = inp_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	assign dst_fmt_q = inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	assign int_fmt_q = inp_pipe_int_fmt_q[0+:fpnew_pkg_INT_FORMAT_BITS];
+	assign src_fmt_q = inp_pipe_src_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	assign dst_fmt_q = inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	assign int_fmt_q = inp_pipe_int_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_INT_FORMAT_BITS+:fpnew_pkg_INT_FORMAT_BITS];
 	wire src_is_int;
 	wire dst_is_int;
 	localparam [3:0] fpnew_pkg_I2F = 12;
@@ -13204,11 +11559,11 @@ module fpnew_cast_multi_8A35C_87530 (
 	localparam [3:0] fpnew_pkg_F2I = 11;
 	assign dst_is_int = inp_pipe_op_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_OP_BITS+:fpnew_pkg_OP_BITS] == fpnew_pkg_F2I;
 	wire [INT_MAN_WIDTH - 1:0] encoded_mant;
-	wire [0:0] fmt_sign;
+	wire [3:0] fmt_sign;
 	wire signed [(NUM_FORMATS * INT_EXP_WIDTH) - 1:0] fmt_exponent;
 	wire [(NUM_FORMATS * INT_MAN_WIDTH) - 1:0] fmt_mantissa;
 	wire signed [(NUM_FORMATS * INT_EXP_WIDTH) - 1:0] fmt_shift_compensation;
-	wire [7:0] info;
+	wire [31:0] info;
 	reg [(NUM_INT_FORMATS * INT_MAN_WIDTH) - 1:0] ifmt_input_val;
 	wire int_sign;
 	wire [INT_MAN_WIDTH - 1:0] int_value;
@@ -13221,16 +11576,16 @@ module fpnew_cast_multi_8A35C_87530 (
 			sv2v_cast_32_signed = inp;
 		endfunction
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : fmt_init_inputs
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_9359B;
+				input reg [1:0] inp;
 				sv2v_cast_9359B = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_9359B(fmt));
 			localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(sv2v_cast_9359B(fmt));
 			localparam [31:0] MAN_BITS = fpnew_pkg_man_bits(sv2v_cast_9359B(fmt));
 			if (FpFmtConfig[fmt]) begin : active_format
-				function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-					input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+				function automatic [1:0] sv2v_cast_9359B;
+					input reg [1:0] inp;
 					sv2v_cast_9359B = inp;
 				endfunction
 				fpnew_classifier #(
@@ -13262,8 +11617,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	generate
 		genvar ifmt;
 		for (ifmt = 0; ifmt < sv2v_cast_32_signed(NUM_INT_FORMATS); ifmt = ifmt + 1) begin : gen_sign_extend_int
-			function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_D812A;
-				input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_D812A;
+				input reg [1:0] inp;
 				sv2v_cast_D812A = inp;
 			endfunction
 			localparam [31:0] INT_WIDTH = fpnew_pkg_int_width(sv2v_cast_D812A(ifmt));
@@ -13293,8 +11648,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	wire signed [INT_EXP_WIDTH - 1:0] src_subnormal;
 	wire signed [INT_EXP_WIDTH - 1:0] src_offset;
 	function automatic [31:0] fpnew_pkg_bias;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] - 1)) - 1);
+		input reg [1:0] fmt;
+		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] - 1)) - 1);
 	endfunction
 	assign src_bias = $signed(fpnew_pkg_bias(src_fmt_q));
 	assign src_exp = fmt_exponent[src_fmt_q * INT_EXP_WIDTH+:INT_EXP_WIDTH];
@@ -13334,9 +11689,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	wire mant_is_zero_q;
 	wire op_mod_q2;
 	wire [2:0] rnd_mode_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_q2;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_q2;
-	wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_q2;
+	wire [1:0] src_fmt_q2;
+	wire [1:0] dst_fmt_q2;
+	wire [1:0] int_fmt_q2;
 	wire [0:NUM_MID_REGS] mid_pipe_input_sign_q;
 	wire signed [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * INT_EXP_WIDTH) + ((NUM_MID_REGS * INT_EXP_WIDTH) - 1) : ((NUM_MID_REGS + 1) * INT_EXP_WIDTH) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * INT_EXP_WIDTH : 0)] mid_pipe_input_exp_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * INT_MAN_WIDTH) + ((NUM_MID_REGS * INT_MAN_WIDTH) - 1) : ((NUM_MID_REGS + 1) * INT_MAN_WIDTH) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * INT_MAN_WIDTH : 0)] mid_pipe_input_mant_q;
@@ -13347,9 +11702,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	wire [0:NUM_MID_REGS] mid_pipe_mant_zero_q;
 	wire [0:NUM_MID_REGS] mid_pipe_op_mod_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * 3) + ((NUM_MID_REGS * 3) - 1) : ((NUM_MID_REGS + 1) * 3) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * 3 : 0)] mid_pipe_rnd_mode_q;
-	wire [(0 >= NUM_MID_REGS ? -1 : -1):(0 >= NUM_MID_REGS ? 0 : 0)] mid_pipe_src_fmt_q;
-	wire [(0 >= NUM_MID_REGS ? -1 : -1):(0 >= NUM_MID_REGS ? 0 : 0)] mid_pipe_dst_fmt_q;
-	wire [(0 >= NUM_MID_REGS ? -1 : -1):(0 >= NUM_MID_REGS ? 0 : 0)] mid_pipe_int_fmt_q;
+	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_MID_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] mid_pipe_src_fmt_q;
+	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_MID_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] mid_pipe_dst_fmt_q;
+	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * fpnew_pkg_INT_FORMAT_BITS) + ((NUM_MID_REGS * fpnew_pkg_INT_FORMAT_BITS) - 1) : ((NUM_MID_REGS + 1) * fpnew_pkg_INT_FORMAT_BITS) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * fpnew_pkg_INT_FORMAT_BITS : 0)] mid_pipe_int_fmt_q;
 	wire [0:NUM_MID_REGS] mid_pipe_tag_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * AuxType_AUX_BITS) + ((NUM_MID_REGS * AuxType_AUX_BITS) - 1) : ((NUM_MID_REGS + 1) * AuxType_AUX_BITS) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * AuxType_AUX_BITS : 0)] mid_pipe_aux_q;
 	wire [0:NUM_MID_REGS] mid_pipe_valid_q;
@@ -13364,9 +11719,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	assign mid_pipe_mant_zero_q[0] = mant_is_zero;
 	assign mid_pipe_op_mod_q[0] = op_mod_q;
 	assign mid_pipe_rnd_mode_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * 3+:3] = inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3+:3];
-	assign mid_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_q;
-	assign mid_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_q;
-	assign mid_pipe_int_fmt_q[0+:fpnew_pkg_INT_FORMAT_BITS] = int_fmt_q;
+	assign mid_pipe_src_fmt_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_q;
+	assign mid_pipe_dst_fmt_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_q;
+	assign mid_pipe_int_fmt_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * fpnew_pkg_INT_FORMAT_BITS+:fpnew_pkg_INT_FORMAT_BITS] = int_fmt_q;
 	assign mid_pipe_tag_q[0] = inp_pipe_tag_q[NUM_INP_REGS];
 	assign mid_pipe_aux_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * AuxType_AUX_BITS+:AuxType_AUX_BITS] = inp_pipe_aux_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * AuxType_AUX_BITS+:AuxType_AUX_BITS];
 	assign mid_pipe_valid_q[0] = inp_pipe_valid_q[NUM_INP_REGS];
@@ -13388,9 +11743,9 @@ module fpnew_cast_multi_8A35C_87530 (
 	assign mant_is_zero_q = mid_pipe_mant_zero_q[NUM_MID_REGS];
 	assign op_mod_q2 = mid_pipe_op_mod_q[NUM_MID_REGS];
 	assign rnd_mode_q = mid_pipe_rnd_mode_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * 3+:3];
-	assign src_fmt_q2 = mid_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	assign dst_fmt_q2 = mid_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	assign int_fmt_q2 = mid_pipe_int_fmt_q[0+:fpnew_pkg_INT_FORMAT_BITS];
+	assign src_fmt_q2 = mid_pipe_src_fmt_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	assign dst_fmt_q2 = mid_pipe_dst_fmt_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	assign int_fmt_q2 = mid_pipe_int_fmt_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * fpnew_pkg_INT_FORMAT_BITS+:fpnew_pkg_INT_FORMAT_BITS];
 	reg [INT_EXP_WIDTH - 1:0] final_exp;
 	reg [2 * INT_MAN_WIDTH:0] preshift_mant;
 	wire [2 * INT_MAN_WIDTH:0] destination_mant;
@@ -13448,8 +11803,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	wire of_after_round;
 	wire uf_after_round;
 	reg [(NUM_FORMATS * WIDTH) - 1:0] fmt_pre_round_abs;
-	reg [0:0] fmt_of_after_round;
-	reg [0:0] fmt_uf_after_round;
+	reg [3:0] fmt_of_after_round;
+	reg [3:0] fmt_uf_after_round;
 	reg [(NUM_INT_FORMATS * WIDTH) - 1:0] ifmt_pre_round_abs;
 	wire rounded_sign;
 	wire [WIDTH - 1:0] rounded_abs;
@@ -13458,8 +11813,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	wire rounded_int_res_zero;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_res_assemble
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_9359B;
+				input reg [1:0] inp;
 				sv2v_cast_9359B = inp;
 			endfunction
 			localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(sv2v_cast_9359B(fmt));
@@ -13478,8 +11833,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	endgenerate
 	generate
 		for (ifmt = 0; ifmt < sv2v_cast_32_signed(NUM_INT_FORMATS); ifmt = ifmt + 1) begin : gen_int_res_sign_ext
-			function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_D812A;
-				input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_D812A;
+				input reg [1:0] inp;
 				sv2v_cast_D812A = inp;
 			endfunction
 			localparam [31:0] INT_WIDTH = fpnew_pkg_int_width(sv2v_cast_D812A(ifmt));
@@ -13510,8 +11865,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	reg [(NUM_FORMATS * WIDTH) - 1:0] fmt_result;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_sign_inject
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_9359B;
+				input reg [1:0] inp;
 				sv2v_cast_9359B = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_9359B(fmt));
@@ -13548,8 +11903,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	reg [(NUM_FORMATS * WIDTH) - 1:0] fmt_special_result;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_special_results
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9359B;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_9359B;
+				input reg [1:0] inp;
 				sv2v_cast_9359B = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_9359B(fmt));
@@ -13581,8 +11936,8 @@ module fpnew_cast_multi_8A35C_87530 (
 	reg [(NUM_INT_FORMATS * WIDTH) - 1:0] ifmt_special_result;
 	generate
 		for (ifmt = 0; ifmt < sv2v_cast_32_signed(NUM_INT_FORMATS); ifmt = ifmt + 1) begin : gen_special_results_int
-			function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_D812A;
-				input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_D812A;
+				input reg [1:0] inp;
 				sv2v_cast_D812A = inp;
 			endfunction
 			localparam [31:0] INT_WIDTH = fpnew_pkg_int_width(sv2v_cast_D812A(ifmt));
@@ -13664,31 +12019,31 @@ module fpnew_classifier (
 	is_boxed_i,
 	info_o
 );
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_9E068;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	function automatic [1:0] sv2v_cast_9E068;
+		input reg [1:0] inp;
 		sv2v_cast_9E068 = inp;
 	endfunction
-	parameter [fpnew_pkg_FP_FORMAT_BITS - 1:0] FpFormat = sv2v_cast_9E068(0);
+	parameter [1:0] FpFormat = sv2v_cast_9E068(0);
 	parameter [31:0] NumOperands = 1;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	localparam [31:0] WIDTH = fpnew_pkg_fp_width(FpFormat);
 	input wire [(NumOperands * WIDTH) - 1:0] operands_i;
 	input wire [NumOperands - 1:0] is_boxed_i;
 	output reg [(NumOperands * 8) - 1:0] info_o;
 	function automatic [31:0] fpnew_pkg_exp_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32];
 	endfunction
 	localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(FpFormat);
 	function automatic [31:0] fpnew_pkg_man_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32];
 	endfunction
 	localparam [31:0] MAN_BITS = fpnew_pkg_man_bits(FpFormat);
 	generate
@@ -13752,32 +12107,32 @@ module fpnew_divsqrt_multi_28154_735ED (
 	busy_o
 );
 	parameter [31:0] AuxType_AUX_BITS = 0;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	parameter [0:0] FpFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtConfig = 1'sb1;
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_AFTER = 1;
 	parameter [1:0] PipeConfig = fpnew_pkg_AFTER;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	function automatic signed [31:0] fpnew_pkg_maximum;
 		input reg signed [31:0] a;
 		input reg signed [31:0] b;
 		fpnew_pkg_maximum = (a > b ? a : b);
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_8C7A2;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_8C7A2;
+		input reg [1:0] inp;
 		sv2v_cast_8C7A2 = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_fp_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_110
+			begin : sv2v_autoblock_112
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (cfg[i])
@@ -13791,11 +12146,11 @@ module fpnew_divsqrt_multi_28154_735ED (
 	input wire clk_i;
 	input wire rst_ni;
 	input wire [(2 * WIDTH) - 1:0] operands_i;
-	input wire [1:0] is_boxed_i;
+	input wire [7:0] is_boxed_i;
 	input wire [2:0] rnd_mode_i;
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
+	input wire [1:0] dst_fmt_i;
 	input wire tag_i;
 	input wire [AuxType_AUX_BITS - 1:0] aux_i;
 	input wire in_valid_i;
@@ -13817,12 +12172,12 @@ module fpnew_divsqrt_multi_28154_735ED (
 	wire [(2 * WIDTH) - 1:0] operands_q;
 	wire [2:0] rnd_mode_q;
 	wire [3:0] op_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_q;
+	wire [1:0] dst_fmt_q;
 	wire in_valid_q;
 	wire [((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? ((((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) - (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0)) + 1) * WIDTH) + (((0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) * WIDTH) - 1) : ((((0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1)) + 1) * WIDTH) + (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) * WIDTH) - 1)):((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) * WIDTH : (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) * WIDTH)] inp_pipe_operands_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0)] inp_pipe_rnd_mode_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_OP_BITS) + ((NUM_INP_REGS * fpnew_pkg_OP_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_OP_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_OP_BITS : 0)] inp_pipe_op_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_dst_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] inp_pipe_dst_fmt_q;
 	wire [0:NUM_INP_REGS] inp_pipe_tag_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * AuxType_AUX_BITS) + ((NUM_INP_REGS * AuxType_AUX_BITS) - 1) : ((NUM_INP_REGS + 1) * AuxType_AUX_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * AuxType_AUX_BITS : 0)] inp_pipe_aux_q;
 	wire [0:NUM_INP_REGS] inp_pipe_valid_q;
@@ -13830,7 +12185,7 @@ module fpnew_divsqrt_multi_28154_735ED (
 	assign inp_pipe_operands_q[WIDTH * ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 2 : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 2) + 1) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) - (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 2 : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 2) + 1) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1)))+:WIDTH * 2] = operands_i;
 	assign inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3+:3] = rnd_mode_i;
 	assign inp_pipe_op_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_OP_BITS+:fpnew_pkg_OP_BITS] = op_i;
-	assign inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
+	assign inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
 	assign inp_pipe_tag_q[0] = tag_i;
 	assign inp_pipe_aux_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * AuxType_AUX_BITS+:AuxType_AUX_BITS] = aux_i;
 	assign inp_pipe_valid_q[0] = in_valid_i;
@@ -13846,20 +12201,25 @@ module fpnew_divsqrt_multi_28154_735ED (
 	assign operands_q = inp_pipe_operands_q[WIDTH * ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 2 : ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 2) + 1) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) - (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 2 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 2 : ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 2) + 1) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 2) + ((NUM_INP_REGS * 2) - 1) : ((NUM_INP_REGS + 1) * 2) - 1)))+:WIDTH * 2];
 	assign rnd_mode_q = inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3+:3];
 	assign op_q = inp_pipe_op_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_OP_BITS+:fpnew_pkg_OP_BITS];
-	assign dst_fmt_q = inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
+	assign dst_fmt_q = inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
 	assign in_valid_q = inp_pipe_valid_q[NUM_INP_REGS];
 	reg [1:0] divsqrt_fmt;
 	reg [127:0] divsqrt_operands;
 	reg input_is_fp8;
-	localparam [fpnew_pkg_FP_FORMAT_BITS - 1:0] fpnew_pkg_FP32 = 'd0;
+	localparam [1:0] fpnew_pkg_FP16 = 'd2;
+	localparam [1:0] fpnew_pkg_FP32 = 'd0;
+	localparam [1:0] fpnew_pkg_FP64 = 'd1;
+	localparam [1:0] fpnew_pkg_FP8 = 'd3;
 	always @(*) begin : translate_fmt
 		case (dst_fmt_q)
 			fpnew_pkg_FP32: divsqrt_fmt = 2'b00;
+			fpnew_pkg_FP64: divsqrt_fmt = 2'b01;
+			fpnew_pkg_FP16: divsqrt_fmt = 2'b10;
 			default: divsqrt_fmt = 2'b10;
 		endcase
-		input_is_fp8 = 1'b0;
-		divsqrt_operands[0+:64] = operands_q[0+:WIDTH];
-		divsqrt_operands[64+:64] = operands_q[WIDTH+:WIDTH];
+		input_is_fp8 = FpFmtConfig[fpnew_pkg_FP8] & (dst_fmt_q == fpnew_pkg_FP8);
+		divsqrt_operands[0+:64] = (input_is_fp8 ? operands_q[0+:WIDTH] << 8 : operands_q[0+:WIDTH]);
+		divsqrt_operands[64+:64] = (input_is_fp8 ? operands_q[WIDTH+:WIDTH] << 8 : operands_q[WIDTH+:WIDTH]);
 	end
 	reg in_ready;
 	wire div_valid;
@@ -13961,8 +12321,8 @@ module fpnew_divsqrt_multi_28154_735ED (
 		.Ready_SO(unit_ready),
 		.Done_SO(unit_done)
 	);
-	assign adjusted_result = (result_is_fp8_q ? unit_result >> 8 : unit_result);
 	always @(posedge __clk) __q <= (__load ? __d : __q);
+	assign adjusted_result = (result_is_fp8_q ? unit_result >> 8 : unit_result);
 	wire [WIDTH - 1:0] result_d;
 	wire [4:0] status_d;
 	assign result_d = (data_is_held ? held_result_q : adjusted_result);
@@ -14020,32 +12380,32 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	busy_o
 );
 	parameter [31:0] AuxType_AUX_BITS = 0;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	parameter [0:0] FpFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtConfig = 1'sb1;
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	function automatic signed [31:0] fpnew_pkg_maximum;
 		input reg signed [31:0] a;
 		input reg signed [31:0] b;
 		fpnew_pkg_maximum = (a > b ? a : b);
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_3AA4D;
+		input reg [1:0] inp;
 		sv2v_cast_3AA4D = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_fp_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_111
+			begin : sv2v_autoblock_113
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (cfg[i])
@@ -14059,13 +12419,13 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	input wire clk_i;
 	input wire rst_ni;
 	input wire [(3 * WIDTH) - 1:0] operands_i;
-	input wire [2:0] is_boxed_i;
+	input wire [11:0] is_boxed_i;
 	input wire [2:0] rnd_mode_i;
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
 	input wire op_mod_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
 	input wire tag_i;
 	input wire [AuxType_AUX_BITS - 1:0] aux_i;
 	input wire in_valid_i;
@@ -14080,19 +12440,19 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	input wire out_ready_i;
 	output wire busy_o;
 	function automatic [31:0] fpnew_pkg_exp_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32];
 	endfunction
 	function automatic [31:0] fpnew_pkg_man_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32];
 	endfunction
 	function automatic [63:0] fpnew_pkg_super_format;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [63:0] res;
 		begin
 			res = {64 {1'sb0}};
-			begin : sv2v_autoblock_112
+			begin : sv2v_autoblock_114
 				reg [31:0] fmt;
 				for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
 					if (cfg[fmt]) begin
@@ -14118,26 +12478,26 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	localparam [1:0] fpnew_pkg_AFTER = 1;
 	localparam NUM_OUT_REGS = (PipeConfig == fpnew_pkg_AFTER ? NumPipeRegs : (PipeConfig == fpnew_pkg_DISTRIBUTED ? NumPipeRegs / 3 : 0));
 	wire [(3 * WIDTH) - 1:0] operands_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_q;
+	wire [1:0] src_fmt_q;
+	wire [1:0] dst_fmt_q;
 	wire [((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? ((((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) - (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0)) + 1) * WIDTH) + (((0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) * WIDTH) - 1) : ((((0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1)) + 1) * WIDTH) + (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) * WIDTH) - 1)):((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) * WIDTH : (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) * WIDTH)] inp_pipe_operands_q;
-	wire [((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? ((((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) - (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0)) + 1) * 3) + (((0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) * 3) - 1) : ((((0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1)) + 1) * 3) + (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) * 3) - 1)):((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) * 3 : (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) * 3)] inp_pipe_is_boxed_q;
+	wire [((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? ((((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) - (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0)) + 1) * 3) + (((0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) * 3) - 1) : ((((0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1)) + 1) * 3) + (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) * 3) - 1)):((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) * 3 : (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) * 3)] inp_pipe_is_boxed_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0)] inp_pipe_rnd_mode_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_OP_BITS) + ((NUM_INP_REGS * fpnew_pkg_OP_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_OP_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_OP_BITS : 0)] inp_pipe_op_q;
 	wire [0:NUM_INP_REGS] inp_pipe_op_mod_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_src_fmt_q;
-	wire [(0 >= NUM_INP_REGS ? -1 : -1):(0 >= NUM_INP_REGS ? 0 : 0)] inp_pipe_dst_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] inp_pipe_src_fmt_q;
+	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_INP_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] inp_pipe_dst_fmt_q;
 	wire [0:NUM_INP_REGS] inp_pipe_tag_q;
 	wire [(0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * AuxType_AUX_BITS) + ((NUM_INP_REGS * AuxType_AUX_BITS) - 1) : ((NUM_INP_REGS + 1) * AuxType_AUX_BITS) - 1):(0 >= NUM_INP_REGS ? NUM_INP_REGS * AuxType_AUX_BITS : 0)] inp_pipe_aux_q;
 	wire [0:NUM_INP_REGS] inp_pipe_valid_q;
 	wire [0:NUM_INP_REGS] inp_pipe_ready;
 	assign inp_pipe_operands_q[WIDTH * ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3 : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3) + 2) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) - (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3 : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3) + 2) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1)))+:WIDTH * 3] = operands_i;
-	assign inp_pipe_is_boxed_q[3 * ((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? ((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS : (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - (((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS : (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1)))+:3] = is_boxed_i;
+	assign inp_pipe_is_boxed_q[3 * ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS) + 3) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? (0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS : ((0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * NUM_FORMATS) + 3) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1)))+:12] = is_boxed_i;
 	assign inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * 3+:3] = rnd_mode_i;
 	assign inp_pipe_op_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_OP_BITS+:fpnew_pkg_OP_BITS] = op_i;
 	assign inp_pipe_op_mod_q[0] = op_mod_i;
-	assign inp_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_i;
-	assign inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
+	assign inp_pipe_src_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = src_fmt_i;
+	assign inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_i;
 	assign inp_pipe_tag_q[0] = tag_i;
 	assign inp_pipe_aux_q[(0 >= NUM_INP_REGS ? 0 : NUM_INP_REGS) * AuxType_AUX_BITS+:AuxType_AUX_BITS] = aux_i;
 	assign inp_pipe_valid_q[0] = in_valid_i;
@@ -14151,12 +12511,12 @@ module fpnew_fma_multi_E4D0A_BE123 (
 		end
 	endgenerate
 	assign operands_q = inp_pipe_operands_q[WIDTH * ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? ((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3 : ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3) + 2) : (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) - (((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * 3 : 0) ? (0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3 : ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3) + 2) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * 3) + ((NUM_INP_REGS * 3) - 1) : ((NUM_INP_REGS + 1) * 3) - 1)))+:WIDTH * 3];
-	assign src_fmt_q = inp_pipe_src_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	assign dst_fmt_q = inp_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
-	wire [2:0] fmt_sign;
-	wire signed [(3 * SUPER_EXP_BITS) - 1:0] fmt_exponent;
-	wire [(3 * SUPER_MAN_BITS) - 1:0] fmt_mantissa;
-	wire [23:0] info_q;
+	assign src_fmt_q = inp_pipe_src_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	assign dst_fmt_q = inp_pipe_dst_fmt_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
+	wire [11:0] fmt_sign;
+	wire signed [(12 * SUPER_EXP_BITS) - 1:0] fmt_exponent;
+	wire [(12 * SUPER_MAN_BITS) - 1:0] fmt_mantissa;
+	wire [95:0] info_q;
 	localparam [0:0] fpnew_pkg_DONT_CARE = 1'b1;
 	generate
 		genvar fmt;
@@ -14165,8 +12525,8 @@ module fpnew_fma_multi_E4D0A_BE123 (
 			sv2v_cast_32_signed = inp;
 		endfunction
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : fmt_init_inputs
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_3AA4D;
+				input reg [1:0] inp;
 				sv2v_cast_3AA4D = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_3AA4D(fmt));
@@ -14174,8 +12534,8 @@ module fpnew_fma_multi_E4D0A_BE123 (
 			localparam [31:0] MAN_BITS = fpnew_pkg_man_bits(sv2v_cast_3AA4D(fmt));
 			if (FpFmtConfig[fmt]) begin : active_format
 				wire [(3 * FP_WIDTH) - 1:0] trimmed_ops;
-				function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-					input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+				function automatic [1:0] sv2v_cast_3AA4D;
+					input reg [1:0] inp;
 					sv2v_cast_3AA4D = inp;
 				endfunction
 				fpnew_classifier #(
@@ -14183,7 +12543,7 @@ module fpnew_fma_multi_E4D0A_BE123 (
 					.NumOperands(3)
 				) i_fpnew_classifier(
 					.operands_i(trimmed_ops),
-					.is_boxed_i(inp_pipe_is_boxed_q[((0 >= NUM_INP_REGS ? (1 - NUM_INP_REGS) + (NUM_INP_REGS - 1) : NUM_INP_REGS) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS : 0) ? ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * NUM_FORMATS) + fmt : (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - ((((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * NUM_FORMATS) + fmt) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1))) * 3+:3]),
+					.is_boxed_i(inp_pipe_is_boxed_q[((0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1) >= (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) ? ((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * NUM_FORMATS) + fmt : (0 >= NUM_INP_REGS ? NUM_INP_REGS * NUM_FORMATS : 0) - ((((0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * NUM_FORMATS) + fmt) - (0 >= NUM_INP_REGS ? ((1 - NUM_INP_REGS) * NUM_FORMATS) + ((NUM_INP_REGS * NUM_FORMATS) - 1) : ((NUM_INP_REGS + 1) * NUM_FORMATS) - 1))) * 3+:3]),
 					.info_o(info_q[8 * (fmt * 3)+:24])
 				);
 				genvar op;
@@ -14225,8 +12585,8 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	reg [7:0] info_b;
 	reg [7:0] info_c;
 	function automatic [31:0] fpnew_pkg_bias;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] - 1)) - 1);
+		input reg [1:0] fmt;
+		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] - 1)) - 1);
 	endfunction
 	localparam [3:0] fpnew_pkg_ADD = 2;
 	localparam [3:0] fpnew_pkg_FMADD = 0;
@@ -14284,12 +12644,12 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	wire [4:0] special_status;
 	wire result_is_special;
 	reg [(NUM_FORMATS * WIDTH) - 1:0] fmt_special_result;
-	reg [4:0] fmt_special_status;
-	reg [0:0] fmt_result_is_special;
+	reg [19:0] fmt_special_status;
+	reg [3:0] fmt_result_is_special;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_special_results
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_3AA4D;
+				input reg [1:0] inp;
 				sv2v_cast_3AA4D = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_3AA4D(fmt));
@@ -14399,7 +12759,7 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	wire sticky_before_add_q;
 	wire [(3 * PRECISION_BITS) + 3:0] sum_q;
 	wire final_sign_q;
-	wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_q2;
+	wire [1:0] dst_fmt_q2;
 	wire [2:0] rnd_mode_q;
 	wire result_is_special_q;
 	wire [((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS) - 1:0] special_result_q;
@@ -14413,7 +12773,7 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	wire [(0 >= NUM_MID_REGS ? (((3 * PRECISION_BITS) + 3) >= 0 ? ((1 - NUM_MID_REGS) * ((3 * PRECISION_BITS) + 4)) + ((NUM_MID_REGS * ((3 * PRECISION_BITS) + 4)) - 1) : ((1 - NUM_MID_REGS) * (1 - ((3 * PRECISION_BITS) + 3))) + ((((3 * PRECISION_BITS) + 3) + (NUM_MID_REGS * (1 - ((3 * PRECISION_BITS) + 3)))) - 1)) : (((3 * PRECISION_BITS) + 3) >= 0 ? ((NUM_MID_REGS + 1) * ((3 * PRECISION_BITS) + 4)) - 1 : ((NUM_MID_REGS + 1) * (1 - ((3 * PRECISION_BITS) + 3))) + ((3 * PRECISION_BITS) + 2))):(0 >= NUM_MID_REGS ? (((3 * PRECISION_BITS) + 3) >= 0 ? NUM_MID_REGS * ((3 * PRECISION_BITS) + 4) : ((3 * PRECISION_BITS) + 3) + (NUM_MID_REGS * (1 - ((3 * PRECISION_BITS) + 3)))) : (((3 * PRECISION_BITS) + 3) >= 0 ? 0 : (3 * PRECISION_BITS) + 3))] mid_pipe_sum_q;
 	wire [0:NUM_MID_REGS] mid_pipe_final_sign_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * 3) + ((NUM_MID_REGS * 3) - 1) : ((NUM_MID_REGS + 1) * 3) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * 3 : 0)] mid_pipe_rnd_mode_q;
-	wire [(0 >= NUM_MID_REGS ? -1 : -1):(0 >= NUM_MID_REGS ? 0 : 0)] mid_pipe_dst_fmt_q;
+	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS) + ((NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS) - 1) : ((NUM_MID_REGS + 1) * fpnew_pkg_FP_FORMAT_BITS) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * fpnew_pkg_FP_FORMAT_BITS : 0)] mid_pipe_dst_fmt_q;
 	wire [0:NUM_MID_REGS] mid_pipe_res_is_spec_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS)) + ((NUM_MID_REGS * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS)) - 1) : ((NUM_MID_REGS + 1) * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS)) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS) : 0)] mid_pipe_spec_res_q;
 	wire [(0 >= NUM_MID_REGS ? ((1 - NUM_MID_REGS) * 5) + ((NUM_MID_REGS * 5) - 1) : ((NUM_MID_REGS + 1) * 5) - 1):(0 >= NUM_MID_REGS ? NUM_MID_REGS * 5 : 0)] mid_pipe_spec_stat_q;
@@ -14430,7 +12790,7 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	assign mid_pipe_sum_q[(((3 * PRECISION_BITS) + 3) >= 0 ? 0 : (3 * PRECISION_BITS) + 3) + ((0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * (((3 * PRECISION_BITS) + 3) >= 0 ? (3 * PRECISION_BITS) + 4 : 1 - ((3 * PRECISION_BITS) + 3)))+:(((3 * PRECISION_BITS) + 3) >= 0 ? (3 * PRECISION_BITS) + 4 : 1 - ((3 * PRECISION_BITS) + 3))] = sum;
 	assign mid_pipe_final_sign_q[0] = final_sign;
 	assign mid_pipe_rnd_mode_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * 3+:3] = inp_pipe_rnd_mode_q[(0 >= NUM_INP_REGS ? NUM_INP_REGS : NUM_INP_REGS - NUM_INP_REGS) * 3+:3];
-	assign mid_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_q;
+	assign mid_pipe_dst_fmt_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS] = dst_fmt_q;
 	assign mid_pipe_res_is_spec_q[0] = result_is_special;
 	assign mid_pipe_spec_res_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS)+:(1 + SUPER_EXP_BITS) + SUPER_MAN_BITS] = special_result;
 	assign mid_pipe_spec_stat_q[(0 >= NUM_MID_REGS ? 0 : NUM_MID_REGS) * 5+:5] = special_status;
@@ -14454,7 +12814,7 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	assign sum_q = mid_pipe_sum_q[(((3 * PRECISION_BITS) + 3) >= 0 ? 0 : (3 * PRECISION_BITS) + 3) + ((0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * (((3 * PRECISION_BITS) + 3) >= 0 ? (3 * PRECISION_BITS) + 4 : 1 - ((3 * PRECISION_BITS) + 3)))+:(((3 * PRECISION_BITS) + 3) >= 0 ? (3 * PRECISION_BITS) + 4 : 1 - ((3 * PRECISION_BITS) + 3))];
 	assign final_sign_q = mid_pipe_final_sign_q[NUM_MID_REGS];
 	assign rnd_mode_q = mid_pipe_rnd_mode_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * 3+:3];
-	assign dst_fmt_q2 = mid_pipe_dst_fmt_q[0+:fpnew_pkg_FP_FORMAT_BITS];
+	assign dst_fmt_q2 = mid_pipe_dst_fmt_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * fpnew_pkg_FP_FORMAT_BITS+:fpnew_pkg_FP_FORMAT_BITS];
 	assign result_is_special_q = mid_pipe_res_is_spec_q[NUM_MID_REGS];
 	assign special_result_q = mid_pipe_spec_res_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * ((1 + SUPER_EXP_BITS) + SUPER_MAN_BITS)+:(1 + SUPER_EXP_BITS) + SUPER_MAN_BITS];
 	assign special_status_q = mid_pipe_spec_stat_q[(0 >= NUM_MID_REGS ? NUM_MID_REGS : NUM_MID_REGS - NUM_MID_REGS) * 5+:5];
@@ -14521,9 +12881,9 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	wire uf_before_round;
 	wire uf_after_round;
 	wire [(NUM_FORMATS * (SUPER_EXP_BITS + SUPER_MAN_BITS)) - 1:0] fmt_pre_round_abs;
-	wire [1:0] fmt_round_sticky_bits;
-	reg [0:0] fmt_of_after_round;
-	reg [0:0] fmt_uf_after_round;
+	wire [7:0] fmt_round_sticky_bits;
+	reg [3:0] fmt_of_after_round;
+	reg [3:0] fmt_uf_after_round;
 	wire rounded_sign;
 	wire [(SUPER_EXP_BITS + SUPER_MAN_BITS) - 1:0] rounded_abs;
 	wire result_zero;
@@ -14531,8 +12891,8 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	assign uf_before_round = final_exponent == 0;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_res_assemble
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_3AA4D;
+				input reg [1:0] inp;
 				sv2v_cast_3AA4D = inp;
 			endfunction
 			localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(sv2v_cast_3AA4D(fmt));
@@ -14577,8 +12937,8 @@ module fpnew_fma_multi_E4D0A_BE123 (
 	reg [(NUM_FORMATS * WIDTH) - 1:0] fmt_result;
 	generate
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_sign_inject
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_3AA4D;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_3AA4D;
+				input reg [1:0] inp;
 				sv2v_cast_3AA4D = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_3AA4D(fmt));
@@ -14669,20 +13029,20 @@ module fpnew_fma_B2D03 (
 	out_ready_i,
 	busy_o
 );
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_1ED13;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	function automatic [1:0] sv2v_cast_1ED13;
+		input reg [1:0] inp;
 		sv2v_cast_1ED13 = inp;
 	endfunction
-	parameter [fpnew_pkg_FP_FORMAT_BITS - 1:0] FpFormat = sv2v_cast_1ED13(0);
+	parameter [1:0] FpFormat = sv2v_cast_1ED13(0);
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	localparam [31:0] WIDTH = fpnew_pkg_fp_width(FpFormat);
 	input wire clk_i;
@@ -14707,18 +13067,18 @@ module fpnew_fma_B2D03 (
 	input wire out_ready_i;
 	output wire busy_o;
 	function automatic [31:0] fpnew_pkg_exp_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32];
 	endfunction
 	localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(FpFormat);
 	function automatic [31:0] fpnew_pkg_man_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32];
 	endfunction
 	localparam [31:0] MAN_BITS = fpnew_pkg_man_bits(FpFormat);
 	function automatic [31:0] fpnew_pkg_bias;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] - 1)) - 1);
+		input reg [1:0] fmt;
+		fpnew_pkg_bias = $unsigned((2 ** (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] - 1)) - 1);
 	endfunction
 	localparam [31:0] BIAS = fpnew_pkg_bias(FpFormat);
 	localparam [31:0] PRECISION_BITS = MAN_BITS + 1;
@@ -15119,20 +13479,20 @@ module fpnew_noncomp_6DFAC (
 	out_ready_i,
 	busy_o
 );
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_F7742;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	function automatic [1:0] sv2v_cast_F7742;
+		input reg [1:0] inp;
 		sv2v_cast_F7742 = inp;
 	endfunction
-	parameter [fpnew_pkg_FP_FORMAT_BITS - 1:0] FpFormat = sv2v_cast_F7742(0);
+	parameter [1:0] FpFormat = sv2v_cast_F7742(0);
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	localparam [31:0] WIDTH = fpnew_pkg_fp_width(FpFormat);
 	input wire clk_i;
@@ -15159,13 +13519,13 @@ module fpnew_noncomp_6DFAC (
 	input wire out_ready_i;
 	output wire busy_o;
 	function automatic [31:0] fpnew_pkg_exp_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_exp_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32];
 	endfunction
 	localparam [31:0] EXP_BITS = fpnew_pkg_exp_bits(FpFormat);
 	function automatic [31:0] fpnew_pkg_man_bits;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32];
+		input reg [1:0] fmt;
+		fpnew_pkg_man_bits = fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32];
 	endfunction
 	localparam [31:0] MAN_BITS = fpnew_pkg_man_bits(FpFormat);
 	localparam [1:0] fpnew_pkg_DISTRIBUTED = 3;
@@ -15412,9 +13772,11 @@ module fpnew_noncomp_6DFAC (
 	assign out_valid_o = out_pipe_valid_q[NUM_OUT_REGS];
 	assign busy_o = |{inp_pipe_valid_q, out_pipe_valid_q};
 endmodule
+/*
 module fpnew_opgroup_block_BE2AB (
 	clk_i,
 	rst_ni,
+	IS_FIRST_MERGED,
 	operands_i,
 	is_boxed_i,
 	rnd_mode_i,
@@ -15440,13 +13802,13 @@ module fpnew_opgroup_block_BE2AB (
 	parameter [1:0] OpGroup = fpnew_pkg_ADDMUL;
 	parameter [31:0] Width = 32;
 	parameter [0:0] EnableVectors = 1'b1;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	parameter [0:0] FpFmtMask = 1'sb1;
-	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 1;
-	parameter [0:0] IntFmtMask = 1'sb1;
-	parameter [31:0] FmtPipeRegs = 32'd0;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtMask = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	parameter [0:3] IntFmtMask = 1'sb1;
+	parameter [127:0] FmtPipeRegs = {fpnew_pkg_NUM_FP_FORMATS {32'd0}};
 	localparam [1:0] fpnew_pkg_PARALLEL = 1;
-	parameter [1:0] FmtUnitTypes = {fpnew_pkg_PARALLEL};
+	parameter [7:0] FmtUnitTypes = {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}};
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
 	localparam [31:0] NUM_FORMATS = fpnew_pkg_NUM_FP_FORMATS;
@@ -15464,6 +13826,7 @@ module fpnew_opgroup_block_BE2AB (
 		endcase
 	endfunction
 	localparam [31:0] NUM_OPERANDS = fpnew_pkg_num_operands(OpGroup);
+	input wire IS_FIRST_MERGED;
 	input wire clk_i;
 	input wire rst_ni;
 	input wire [(NUM_OPERANDS * Width) - 1:0] operands_i;
@@ -15472,11 +13835,11 @@ module fpnew_opgroup_block_BE2AB (
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
 	input wire op_mod_i;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
-	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_i;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	input wire [1:0] int_fmt_i;
 	input wire vectorial_op_i;
 	input wire tag_i;
 	input wire in_valid_i;
@@ -15489,26 +13852,26 @@ module fpnew_opgroup_block_BE2AB (
 	output wire out_valid_o;
 	input wire out_ready_i;
 	output wire busy_o;
-	wire [0:0] fmt_in_ready;
-	wire [0:0] fmt_out_valid;
-	wire [0:0] fmt_out_ready;
-	wire [0:0] fmt_busy;
-	wire [((Width + 6) >= 0 ? Width + 6 : (1 - (Width + 6)) + (Width + 5)):((Width + 6) >= 0 ? 0 : Width + 6)] fmt_outputs;
+	wire [3:0] fmt_in_ready;
+	wire [3:0] fmt_out_valid;
+	wire [3:0] fmt_out_ready;
+	wire [3:0] fmt_busy;
+	wire [((Width + 6) >= 0 ? (4 * (Width + 7)) - 1 : (4 * (1 - (Width + 6))) + (Width + 5)):((Width + 6) >= 0 ? 0 : Width + 6)] fmt_outputs;
 	assign in_ready_o = in_valid_i & fmt_in_ready[dst_fmt_i];
 	localparam [0:0] fpnew_pkg_DONT_CARE = 1'b1;
 	localparam [1:0] fpnew_pkg_MERGED = 2;
 	function automatic fpnew_pkg_any_enabled_multi;
-		input reg [1:0] types;
-		input reg [0:0] cfg;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
 		reg [0:1] _sv2v_jump;
 		begin
 			_sv2v_jump = 2'b00;
-			begin : sv2v_autoblock_113
+			begin : sv2v_autoblock_115
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (_sv2v_jump < 2'b10) begin
 						_sv2v_jump = 2'b00;
-						if (cfg[i] && (types[i * 2+:2] == fpnew_pkg_MERGED)) begin
+						if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED)) begin
 							fpnew_pkg_any_enabled_multi = 1'b1;
 							_sv2v_jump = 2'b11;
 						end
@@ -15522,22 +13885,22 @@ module fpnew_opgroup_block_BE2AB (
 			end
 		end
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_F6DD6;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_F6DD6;
+		input reg [1:0] inp;
 		sv2v_cast_F6DD6 = inp;
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] fpnew_pkg_get_first_enabled_multi;
-		input reg [1:0] types;
-		input reg [0:0] cfg;
+	function automatic [1:0] fpnew_pkg_get_first_enabled_multi;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
 		reg [0:1] _sv2v_jump;
 		begin
 			_sv2v_jump = 2'b00;
-			begin : sv2v_autoblock_114
+			begin : sv2v_autoblock_116
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (_sv2v_jump < 2'b10) begin
 						_sv2v_jump = 2'b00;
-						if (cfg[i] && (types[i * 2+:2] == fpnew_pkg_MERGED)) begin
+						if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED)) begin
 							fpnew_pkg_get_first_enabled_multi = sv2v_cast_F6DD6(i);
 							_sv2v_jump = 2'b11;
 						end
@@ -15552,32 +13915,53 @@ module fpnew_opgroup_block_BE2AB (
 		end
 	endfunction
 	function automatic fpnew_pkg_is_first_enabled_multi;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		input reg [1:0] types;
-		input reg [0:0] cfg;
-		reg [0:1] _sv2v_jump;
-		begin
-			_sv2v_jump = 2'b00;
-			begin : sv2v_autoblock_115
-				reg [31:0] i;
-				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
-					if (_sv2v_jump < 2'b10) begin
-						_sv2v_jump = 2'b00;
-						if (cfg[i] && (types[i * 2+:2] == fpnew_pkg_MERGED)) begin
-							fpnew_pkg_is_first_enabled_multi = sv2v_cast_F6DD6(i) == fmt;
-							_sv2v_jump = 2'b11;
+		input reg [1:0] fmt;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
+		//reg [0:1] _sv2v_jump;
+		reg temp;
+		reg [1:0] check;
+		reg [31:0] i;
+		begin: checking
+			check[0]=00;
+			check[1]=01;
+			check[2]=10;
+			check[3]=11;
+		end
+		begin: func
+			check[0]=00;
+                        check[1]=01;
+                        check[2]=10;
+                        check[3]=11;
+			//_sv2v_jump = 2'b00;
+			//begin : sv2v_autoblock_117
+				//reg [31:0] i;
+				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1) begin
+					//if (_sv2v_jump < 2'b10) begin
+						//_sv2v_jump = 2'b00;
+						if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED)) begin
+							temp = check[i]==fmt; // (sv2v_cast_F6DD6(i) == fmt);
+							//_sv2v_jump = 2'b11;
+						end else begin
+							temp = 1'b0;
 						end
-					end
-			end
-			if (_sv2v_jump != 2'b11)
-				_sv2v_jump = 2'b00;
-			if (_sv2v_jump == 2'b00) begin
-				fpnew_pkg_is_first_enabled_multi = 1'b0;
-				_sv2v_jump = 2'b11;
-			end
+					//end
+				end
+				fpnew_pkg_is_first_enabled_multi = temp;
+			//end
+			//if (_sv2v_jump != 2'b11)
+				//_sv2v_jump = 2'b00;
+			//if (_sv2v_jump == 2'b00) begin
+				//fpnew_pkg_is_first_enabled_multi = 1'b0;
+				//_sv2v_jump = 2'b11;
+			//end
 		end
 	endfunction
 	localparam [1:0] fpnew_pkg_DISABLED = 0;
+	function automatic signed [31:0] sv2v_cast_32_signed;
+                input reg signed [31:0] inp;
+        	sv2v_cast_32_signed = inp;
+        endfunction
 	generate
 		genvar fmt;
 		function automatic signed [31:0] sv2v_cast_32_signed;
@@ -15586,16 +13970,16 @@ module fpnew_opgroup_block_BE2AB (
 		endfunction
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_parallel_slices
 			localparam [0:0] ANY_MERGED = fpnew_pkg_any_enabled_multi(FmtUnitTypes, FpFmtMask);
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_F6DD6;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_F6DD6;
+				input reg [1:0] inp;
 				sv2v_cast_F6DD6 = inp;
 			endfunction
-			localparam [0:0] IS_FIRST_MERGED = fpnew_pkg_is_first_enabled_multi(sv2v_cast_F6DD6(fmt), FmtUnitTypes, FpFmtMask);
-			if (FpFmtMask[fmt] && (FmtUnitTypes[fmt * 2+:2] == fpnew_pkg_PARALLEL)) begin : active_format
+			//localparam [0:0] IS_FIRST_MERGED = fpnew_pkg_is_first_enabled_multi(sv2v_cast_F6DD6(fmt), FmtUnitTypes, FpFmtMask);
+			if (FpFmtMask[fmt] && (FmtUnitTypes[(3 - fmt) * 2+:2] == fpnew_pkg_PARALLEL)) begin : active_format
 				wire in_valid;
 				assign in_valid = in_valid_i & (dst_fmt_i == fmt);
-				function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_F6DD6;
-					input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+				function automatic [1:0] sv2v_cast_F6DD6;
+					input reg [1:0] inp;
 					sv2v_cast_F6DD6 = inp;
 				endfunction
 				fpnew_opgroup_fmt_slice_30528 #(
@@ -15603,7 +13987,7 @@ module fpnew_opgroup_block_BE2AB (
 					.FpFormat(sv2v_cast_F6DD6(fmt)),
 					.Width(Width),
 					.EnableVectors(EnableVectors),
-					.NumPipeRegs(FmtPipeRegs[fmt * 32+:32]),
+					.NumPipeRegs(FmtPipeRegs[(3 - fmt) * 32+:32]),
 					.PipeConfig(PipeConfig)
 				) i_fmt_slice(
 					.clk_i(clk_i),
@@ -15641,7 +14025,7 @@ module fpnew_opgroup_block_BE2AB (
 				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 1 : Width + 5)] = fpnew_pkg_DONT_CARE;
 				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 0 : Width + 6)] = fpnew_pkg_DONT_CARE;
 			end
-			else if (!FpFmtMask[fmt] || (FmtUnitTypes[fmt * 2+:2] == fpnew_pkg_DISABLED)) begin : disable_fmt
+			else if (!FpFmtMask[fmt] || (FmtUnitTypes[(3 - fmt) * 2+:2] == fpnew_pkg_DISABLED)) begin : disable_fmt
 				assign fmt_in_ready[fmt] = 1'b0;
 				assign fmt_out_valid[fmt] = 1'b0;
 				assign fmt_busy[fmt] = 1'b0;
@@ -15658,17 +14042,17 @@ module fpnew_opgroup_block_BE2AB (
 		fpnew_pkg_maximum = (a > b ? a : b);
 	endfunction
 	function automatic [31:0] fpnew_pkg_get_num_regs_multi;
-		input reg [31:0] regs;
-		input reg [1:0] types;
-		input reg [0:0] cfg;
+		input reg [127:0] regs;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_116
+			begin : sv2v_autoblock_118
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
-					if (cfg[i] && (types[i * 2+:2] == fpnew_pkg_MERGED))
-						res = fpnew_pkg_maximum(res, regs[i * 32+:32]);
+					if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED))
+						res = fpnew_pkg_maximum(res, regs[(3 - i) * 32+:32]);
 			end
 			fpnew_pkg_get_num_regs_multi = res;
 		end
@@ -15678,7 +14062,7 @@ module fpnew_opgroup_block_BE2AB (
 			localparam FMT = fpnew_pkg_get_first_enabled_multi(FmtUnitTypes, FpFmtMask);
 			localparam REG = fpnew_pkg_get_num_regs_multi(FmtPipeRegs, FmtUnitTypes, FpFmtMask);
 			wire in_valid;
-			assign in_valid = in_valid_i & (FmtUnitTypes[dst_fmt_i * 2+:2] == fpnew_pkg_MERGED);
+			assign in_valid = in_valid_i & (FmtUnitTypes[(3 - dst_fmt_i) * 2+:2] == fpnew_pkg_MERGED);
 			fpnew_opgroup_multifmt_slice_7C482 #(
 				.OpGroup(OpGroup),
 				.Width(Width),
@@ -15722,7 +14106,310 @@ module fpnew_opgroup_block_BE2AB (
 		.clk_i(clk_i),
 		.rst_ni(rst_ni),
 		.flush_i(flush_i),
-		.rr_i({32'd1 {1'sb0}}),
+		.rr_i({$unsigned(2) {1'sb0}}),
+		.req_i(fmt_out_valid),
+		.gnt_o(fmt_out_ready),
+		.data_i(fmt_outputs),
+		.gnt_i(out_ready_i),
+		.req_o(out_valid_o),
+		.data_o(arbiter_output),
+		.idx_o()
+	);
+	assign result_o = arbiter_output[Width + 6-:((Width + 6) >= 7 ? Width : 8 - (Width + 6))];
+	assign status_o = arbiter_output[6-:5];
+	assign extension_bit_o = arbiter_output[1];
+	assign tag_o = arbiter_output[0];
+	assign busy_o = |fmt_busy;
+endmodule*/
+module fpnew_opgroup_block_BE2AB (
+	clk_i,
+	rst_ni,
+	operands_i,
+	is_boxed_i,
+	rnd_mode_i,
+	op_i,
+	op_mod_i,
+	src_fmt_i,
+	dst_fmt_i,
+	int_fmt_i,
+	vectorial_op_i,
+	tag_i,
+	in_valid_i,
+	in_ready_o,
+	flush_i,
+	result_o,
+	status_o,
+	extension_bit_o,
+	tag_o,
+	out_valid_o,
+	out_ready_i,
+	busy_o
+);
+	localparam [1:0] fpnew_pkg_ADDMUL = 0;
+	parameter [1:0] OpGroup = fpnew_pkg_ADDMUL;
+	parameter [31:0] Width = 32;
+	parameter [0:0] EnableVectors = 1'b1;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtMask = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	parameter [0:3] IntFmtMask = 1'sb1;
+	parameter [127:0] FmtPipeRegs = {fpnew_pkg_NUM_FP_FORMATS {32'd0}};
+	localparam [1:0] fpnew_pkg_PARALLEL = 1;
+	parameter [7:0] FmtUnitTypes = {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}};
+	localparam [1:0] fpnew_pkg_BEFORE = 0;
+	parameter [1:0] PipeConfig = fpnew_pkg_BEFORE;
+	localparam [31:0] NUM_FORMATS = fpnew_pkg_NUM_FP_FORMATS;
+	localparam [1:0] fpnew_pkg_CONV = 3;
+	localparam [1:0] fpnew_pkg_DIVSQRT = 1;
+	localparam [1:0] fpnew_pkg_NONCOMP = 2;
+	function automatic [31:0] fpnew_pkg_num_operands;
+		input reg [1:0] grp;
+		case (grp)
+			fpnew_pkg_ADDMUL: fpnew_pkg_num_operands = 3;
+			fpnew_pkg_DIVSQRT: fpnew_pkg_num_operands = 2;
+			fpnew_pkg_NONCOMP: fpnew_pkg_num_operands = 2;
+			fpnew_pkg_CONV: fpnew_pkg_num_operands = 3;
+			default: fpnew_pkg_num_operands = 0;
+		endcase
+	endfunction
+	localparam [31:0] NUM_OPERANDS = fpnew_pkg_num_operands(OpGroup);
+	input wire clk_i;
+	input wire rst_ni;
+	input wire [(NUM_OPERANDS * Width) - 1:0] operands_i;
+	input wire [(NUM_FORMATS * NUM_OPERANDS) - 1:0] is_boxed_i;
+	input wire [2:0] rnd_mode_i;
+	localparam [31:0] fpnew_pkg_OP_BITS = 4;
+	input wire [3:0] op_i;
+	input wire op_mod_i;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	input wire [1:0] int_fmt_i;
+	input wire vectorial_op_i;
+	input wire tag_i;
+	input wire in_valid_i;
+	output wire in_ready_o;
+	input wire flush_i;
+	output wire [Width - 1:0] result_o;
+	output wire [4:0] status_o;
+	output wire extension_bit_o;
+	output wire tag_o;
+	output wire out_valid_o;
+	input wire out_ready_i;
+	output wire busy_o;
+	wire [3:0] fmt_in_ready;
+	wire [3:0] fmt_out_valid;
+	wire [3:0] fmt_out_ready;
+	wire [3:0] fmt_busy;
+	wire [((Width + 6) >= 0 ? (4 * (Width + 7)) - 1 : (4 * (1 - (Width + 6))) + (Width + 5)):((Width + 6) >= 0 ? 0 : Width + 6)] fmt_outputs;
+	assign in_ready_o = in_valid_i & fmt_in_ready[dst_fmt_i];
+	localparam [0:0] fpnew_pkg_DONT_CARE = 1'b1;
+	localparam [1:0] fpnew_pkg_MERGED = 2;
+	function automatic fpnew_pkg_any_enabled_multi;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
+		reg [0:1] _sv2v_jump;
+		begin
+			_sv2v_jump = 2'b00;
+			begin : sv2v_autoblock_115
+				reg [31:0] i;
+				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
+					if (_sv2v_jump < 2'b10) begin
+						_sv2v_jump = 2'b00;
+						if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED)) begin
+							fpnew_pkg_any_enabled_multi = 1'b1;
+							_sv2v_jump = 2'b11;
+						end
+					end
+			end
+			if (_sv2v_jump != 2'b11)
+				_sv2v_jump = 2'b00;
+			if (_sv2v_jump == 2'b00) begin
+				fpnew_pkg_any_enabled_multi = 1'b0;
+				_sv2v_jump = 2'b11;
+			end
+		end
+	endfunction
+	function automatic [1:0] sv2v_cast_F6DD6;
+		input reg [1:0] inp;
+		sv2v_cast_F6DD6 = inp;
+	endfunction
+	function automatic [1:0] fpnew_pkg_get_first_enabled_multi;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
+		reg [0:1] _sv2v_jump;
+		begin
+			_sv2v_jump = 2'b00;
+			begin : sv2v_autoblock_116
+				reg [31:0] i;
+				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
+					if (_sv2v_jump < 2'b10) begin
+						_sv2v_jump = 2'b00;
+						if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED)) begin
+							fpnew_pkg_get_first_enabled_multi = sv2v_cast_F6DD6(i);
+							_sv2v_jump = 2'b11;
+						end
+					end
+			end
+			if (_sv2v_jump != 2'b11)
+				_sv2v_jump = 2'b00;
+			if (_sv2v_jump == 2'b00) begin
+				fpnew_pkg_get_first_enabled_multi = sv2v_cast_F6DD6(0);
+				_sv2v_jump = 2'b11;
+			end
+		end
+	endfunction
+	function automatic [31:0] fpnew_pkg_merged_gen;
+		input reg [1:0] grp;
+		case (grp)
+			fpnew_pkg_ADDMUL, fpnew_pkg_NONCOMP: fpnew_pkg_merged_gen = 0;
+			fpnew_pkg_DIVSQRT, fpnew_pkg_CONV: fpnew_pkg_merged_gen = 1;
+			default: fpnew_pkg_merged_gen = 0;
+		endcase
+	endfunction
+	localparam [1:0] fpnew_pkg_DISABLED = 0;
+	generate
+		genvar fmt;
+		function automatic signed [31:0] sv2v_cast_32_signed;
+			input reg signed [31:0] inp;
+			sv2v_cast_32_signed = inp;
+		endfunction
+		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_parallel_slices
+			localparam [0:0] ANY_MERGED = fpnew_pkg_any_enabled_multi(FmtUnitTypes, FpFmtMask);
+			localparam [0:0] IS_FIRST_MERGED = fpnew_pkg_merged_gen(OpGroup);
+			if (FpFmtMask[fmt] && (FmtUnitTypes[(3 - fmt) * 2+:2] == fpnew_pkg_PARALLEL)) begin : active_format
+				wire in_valid;
+				assign in_valid = in_valid_i & (dst_fmt_i == fmt);
+				function automatic [1:0] sv2v_cast_F6DD6;
+					input reg [1:0] inp;
+					sv2v_cast_F6DD6 = inp;
+				endfunction
+				fpnew_opgroup_fmt_slice_30528 #(
+					.OpGroup(OpGroup),
+					.FpFormat(sv2v_cast_F6DD6(fmt)),
+					.Width(Width),
+					.EnableVectors(EnableVectors),
+					.NumPipeRegs(FmtPipeRegs[(3 - fmt) * 32+:32]),
+					.PipeConfig(PipeConfig)
+				) i_fmt_slice(
+					.clk_i(clk_i),
+					.rst_ni(rst_ni),
+					.operands_i(operands_i),
+					.is_boxed_i(is_boxed_i[fmt * NUM_OPERANDS+:NUM_OPERANDS]),
+					.rnd_mode_i(rnd_mode_i),
+					.op_i(op_i),
+					.op_mod_i(op_mod_i),
+					.vectorial_op_i(vectorial_op_i),
+					.tag_i(tag_i),
+					.in_valid_i(in_valid),
+					.in_ready_o(fmt_in_ready[fmt]),
+					.flush_i(flush_i),
+					.result_o(fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6)) : (((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6))) + ((Width + 6) >= 7 ? Width : 8 - (Width + 6))) - 1)-:((Width + 6) >= 7 ? Width : 8 - (Width + 6))]),
+					.status_o(fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width) : ((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width)) + 4)-:5]),
+					.extension_bit_o(fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 1 : Width + 5)]),
+					.tag_o(fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 0 : Width + 6)]),
+					.out_valid_o(fmt_out_valid[fmt]),
+					.out_ready_i(fmt_out_ready[fmt]),
+					.busy_o(fmt_busy[fmt])
+				);
+			end
+			else if ((FpFmtMask[fmt] && ANY_MERGED) && !IS_FIRST_MERGED) begin : merged_unused
+				localparam FMT = fpnew_pkg_get_first_enabled_multi(FmtUnitTypes, FpFmtMask);
+				function automatic signed [31:0] sv2v_cast_32_signed;
+					input reg signed [31:0] inp;
+					sv2v_cast_32_signed = inp;
+				endfunction
+				assign fmt_in_ready[fmt] = fmt_in_ready[sv2v_cast_32_signed(FMT)];
+				assign fmt_out_valid[fmt] = 1'b0;
+				assign fmt_busy[fmt] = 1'b0;
+				assign fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6)) : (((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6))) + ((Width + 6) >= 7 ? Width : 8 - (Width + 6))) - 1)-:((Width + 6) >= 7 ? Width : 8 - (Width + 6))] = {Width {fpnew_pkg_DONT_CARE}};
+				assign fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width) : ((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width)) + 4)-:5] = {fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE};
+				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 1 : Width + 5)] = fpnew_pkg_DONT_CARE;
+				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 0 : Width + 6)] = fpnew_pkg_DONT_CARE;
+			end
+			else if (!FpFmtMask[fmt] || (FmtUnitTypes[(3 - fmt) * 2+:2] == fpnew_pkg_DISABLED)) begin : disable_fmt
+				assign fmt_in_ready[fmt] = 1'b0;
+				assign fmt_out_valid[fmt] = 1'b0;
+				assign fmt_busy[fmt] = 1'b0;
+				assign fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6)) : (((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6))) + ((Width + 6) >= 7 ? Width : 8 - (Width + 6))) - 1)-:((Width + 6) >= 7 ? Width : 8 - (Width + 6))] = {Width {fpnew_pkg_DONT_CARE}};
+				assign fmt_outputs[((Width + 6) >= 0 ? (fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width) : ((fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width)) + 4)-:5] = {fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE, fpnew_pkg_DONT_CARE};
+				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 1 : Width + 5)] = fpnew_pkg_DONT_CARE;
+				assign fmt_outputs[(fmt * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 0 : Width + 6)] = fpnew_pkg_DONT_CARE;
+			end
+		end
+	endgenerate
+	function automatic signed [31:0] fpnew_pkg_maximum;
+		input reg signed [31:0] a;
+		input reg signed [31:0] b;
+		fpnew_pkg_maximum = (a > b ? a : b);
+	endfunction
+	function automatic [31:0] fpnew_pkg_get_num_regs_multi;
+		input reg [127:0] regs;
+		input reg [7:0] types;
+		input reg [0:3] cfg;
+		reg [31:0] res;
+		begin
+			res = 0;
+			begin : sv2v_autoblock_117
+				reg [31:0] i;
+				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
+					if (cfg[i] && (types[(3 - i) * 2+:2] == fpnew_pkg_MERGED))
+						res = fpnew_pkg_maximum(res, regs[(3 - i) * 32+:32]);
+			end
+			fpnew_pkg_get_num_regs_multi = res;
+		end
+	endfunction
+	generate
+		if (fpnew_pkg_any_enabled_multi(FmtUnitTypes, FpFmtMask)) begin : gen_merged_slice
+			localparam FMT = fpnew_pkg_get_first_enabled_multi(FmtUnitTypes, FpFmtMask);
+			localparam REG = fpnew_pkg_get_num_regs_multi(FmtPipeRegs, FmtUnitTypes, FpFmtMask);
+			wire in_valid;
+			assign in_valid = in_valid_i & (FmtUnitTypes[(3 - dst_fmt_i) * 2+:2] == fpnew_pkg_MERGED);
+			fpnew_opgroup_multifmt_slice_7C482 #(
+				.OpGroup(OpGroup),
+				.Width(Width),
+				.FpFmtConfig(FpFmtMask),
+				.IntFmtConfig(IntFmtMask),
+				.EnableVectors(EnableVectors),
+				.NumPipeRegs(REG),
+				.PipeConfig(PipeConfig)
+			) i_multifmt_slice(
+				.clk_i(clk_i),
+				.rst_ni(rst_ni),
+				.operands_i(operands_i),
+				.is_boxed_i(is_boxed_i),
+				.rnd_mode_i(rnd_mode_i),
+				.op_i(op_i),
+				.op_mod_i(op_mod_i),
+				.src_fmt_i(src_fmt_i),
+				.dst_fmt_i(dst_fmt_i),
+				.int_fmt_i(int_fmt_i),
+				.vectorial_op_i(vectorial_op_i),
+				.tag_i(tag_i),
+				.in_valid_i(in_valid),
+				.in_ready_o(fmt_in_ready[FMT]),
+				.flush_i(flush_i),
+				.result_o(fmt_outputs[((Width + 6) >= 0 ? (FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6)) : (((FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? Width + 6 : (Width + 6) - (Width + 6))) + ((Width + 6) >= 7 ? Width : 8 - (Width + 6))) - 1)-:((Width + 6) >= 7 ? Width : 8 - (Width + 6))]),
+				.status_o(fmt_outputs[((Width + 6) >= 0 ? (FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width) : ((FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 6 : Width)) + 4)-:5]),
+				.extension_bit_o(fmt_outputs[(FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 1 : Width + 5)]),
+				.tag_o(fmt_outputs[(FMT * ((Width + 6) >= 0 ? Width + 7 : 1 - (Width + 6))) + ((Width + 6) >= 0 ? 0 : Width + 6)]),
+				.out_valid_o(fmt_out_valid[FMT]),
+				.out_ready_i(fmt_out_ready[FMT]),
+				.busy_o(fmt_busy[FMT])
+			);
+		end
+	endgenerate
+	wire [Width + 6:0] arbiter_output;
+	rr_arb_tree_252F1_F315E #(
+		.DataType_Width(Width),
+		.NumIn(NUM_FORMATS),
+		.AxiVldRdy(1'b1)
+	) i_arbiter(
+		.clk_i(clk_i),
+		.rst_ni(rst_ni),
+		.flush_i(flush_i),
+		.rr_i({$unsigned(2) {1'sb0}}),
 		.req_i(fmt_out_valid),
 		.gnt_o(fmt_out_ready),
 		.data_i(fmt_outputs),
@@ -15760,13 +14447,13 @@ module fpnew_opgroup_fmt_slice_30528 (
 );
 	localparam [1:0] fpnew_pkg_ADDMUL = 0;
 	parameter [1:0] OpGroup = fpnew_pkg_ADDMUL;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_CA66C;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	function automatic [1:0] sv2v_cast_CA66C;
+		input reg [1:0] inp;
 		sv2v_cast_CA66C = inp;
 	endfunction
-	parameter [fpnew_pkg_FP_FORMAT_BITS - 1:0] FpFormat = sv2v_cast_CA66C(0);
+	parameter [1:0] FpFormat = sv2v_cast_CA66C(0);
 	parameter [31:0] Width = 32;
 	parameter [0:0] EnableVectors = 1'b1;
 	parameter [31:0] NumPipeRegs = 0;
@@ -15806,15 +14493,15 @@ module fpnew_opgroup_fmt_slice_30528 (
 	output wire out_valid_o;
 	input wire out_ready_i;
 	output wire busy_o;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(FpFormat);
 	function automatic [31:0] fpnew_pkg_num_lanes;
 		input reg [31:0] width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
+		input reg [1:0] fmt;
 		input reg vec;
 		fpnew_pkg_num_lanes = (vec ? width / fpnew_pkg_fp_width(fmt) : 1);
 	endfunction
@@ -15869,7 +14556,7 @@ module fpnew_opgroup_fmt_slice_30528 (
 					sv2v_cast_32_signed = inp;
 				endfunction
 				always @(*) begin : prepare_input
-					begin : sv2v_autoblock_117
+					begin : sv2v_autoblock_119
 						reg signed [31:0] i;
 						for (i = 0; i < sv2v_cast_32_signed(NUM_OPERANDS); i = i + 1)
 							local_operands[i * FP_WIDTH+:FP_WIDTH] = operands_i[(i * Width) + (((($unsigned(lane) + 1) * FP_WIDTH) - 1) >= ($unsigned(lane) * FP_WIDTH) ? (($unsigned(lane) + 1) * FP_WIDTH) - 1 : (((($unsigned(lane) + 1) * FP_WIDTH) - 1) + (((($unsigned(lane) + 1) * FP_WIDTH) - 1) >= ($unsigned(lane) * FP_WIDTH) ? (((($unsigned(lane) + 1) * FP_WIDTH) - 1) - ($unsigned(lane) * FP_WIDTH)) + 1 : (($unsigned(lane) * FP_WIDTH) - ((($unsigned(lane) + 1) * FP_WIDTH) - 1)) + 1)) - 1)-:(((($unsigned(lane) + 1) * FP_WIDTH) - 1) >= ($unsigned(lane) * FP_WIDTH) ? (((($unsigned(lane) + 1) * FP_WIDTH) - 1) - ($unsigned(lane) * FP_WIDTH)) + 1 : (($unsigned(lane) * FP_WIDTH) - ((($unsigned(lane) + 1) * FP_WIDTH) - 1)) + 1)];
@@ -15974,7 +14661,7 @@ module fpnew_opgroup_fmt_slice_30528 (
 	always @(*) begin : output_processing
 		reg [4:0] temp_status;
 		temp_status = {5 {1'sb0}};
-		begin : sv2v_autoblock_118
+		begin : sv2v_autoblock_120
 			reg signed [31:0] i;
 			for (i = 0; i < sv2v_cast_32_signed(NUM_LANES); i = i + 1)
 				temp_status = temp_status | lane_status[i * 5+:5];
@@ -16009,10 +14696,10 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	localparam [1:0] fpnew_pkg_CONV = 3;
 	parameter [1:0] OpGroup = fpnew_pkg_CONV;
 	parameter [31:0] Width = 64;
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	parameter [0:0] FpFmtConfig = 1'sb1;
-	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 1;
-	parameter [0:0] IntFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	parameter [0:3] FpFmtConfig = 1'sb1;
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	parameter [0:3] IntFmtConfig = 1'sb1;
 	parameter [0:0] EnableVectors = 1'b1;
 	parameter [31:0] NumPipeRegs = 0;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
@@ -16040,11 +14727,11 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
 	input wire op_mod_i;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
-	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_i;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	input wire [1:0] int_fmt_i;
 	input wire vectorial_op_i;
 	input wire tag_i;
 	input wire in_valid_i;
@@ -16057,26 +14744,26 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	output wire out_valid_o;
 	input wire out_ready_i;
 	output wire busy_o;
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
 	function automatic signed [31:0] fpnew_pkg_maximum;
 		input reg signed [31:0] a;
 		input reg signed [31:0] b;
 		fpnew_pkg_maximum = (a > b ? a : b);
 	endfunction
-	function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_38622;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_38622;
+		input reg [1:0] inp;
 		sv2v_cast_38622 = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_fp_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_119
+			begin : sv2v_autoblock_121
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (cfg[i])
@@ -16086,23 +14773,29 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 		end
 	endfunction
 	localparam [31:0] MAX_FP_WIDTH = fpnew_pkg_max_fp_width(FpFmtConfig);
-	localparam [fpnew_pkg_INT_FORMAT_BITS - 1:0] fpnew_pkg_INT32 = 0;
+	localparam [1:0] fpnew_pkg_INT16 = 1;
+	localparam [1:0] fpnew_pkg_INT32 = 2;
+	localparam [1:0] fpnew_pkg_INT64 = 3;
+	localparam [1:0] fpnew_pkg_INT8 = 0;
 	function automatic [31:0] fpnew_pkg_int_width;
-		input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] ifmt;
+		input reg [1:0] ifmt;
 		case (ifmt)
+			fpnew_pkg_INT8: fpnew_pkg_int_width = 8;
+			fpnew_pkg_INT16: fpnew_pkg_int_width = 16;
 			fpnew_pkg_INT32: fpnew_pkg_int_width = 32;
+			fpnew_pkg_INT64: fpnew_pkg_int_width = 64;
 		endcase
 	endfunction
-	function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_E880F;
-		input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+	function automatic [1:0] sv2v_cast_E880F;
+		input reg [1:0] inp;
 		sv2v_cast_E880F = inp;
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_int_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = 0;
-			begin : sv2v_autoblock_120
+			begin : sv2v_autoblock_122
 				reg signed [31:0] ifmt;
 				for (ifmt = 0; ifmt < fpnew_pkg_NUM_INT_FORMATS; ifmt = ifmt + 1)
 					if (cfg[ifmt])
@@ -16118,11 +14811,11 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 		fpnew_pkg_minimum = (a < b ? a : b);
 	endfunction
 	function automatic [31:0] fpnew_pkg_min_fp_width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		reg [31:0] res;
 		begin
 			res = fpnew_pkg_max_fp_width(cfg);
-			begin : sv2v_autoblock_121
+			begin : sv2v_autoblock_123
 				reg [31:0] i;
 				for (i = 0; i < fpnew_pkg_NUM_FP_FORMATS; i = i + 1)
 					if (cfg[i])
@@ -16133,13 +14826,13 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	endfunction
 	function automatic [31:0] fpnew_pkg_max_num_lanes;
 		input reg [31:0] width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		input reg vec;
 		fpnew_pkg_max_num_lanes = (vec ? width / fpnew_pkg_min_fp_width(cfg) : 1);
 	endfunction
 	localparam [31:0] NUM_LANES = fpnew_pkg_max_num_lanes(Width, FpFmtConfig, 1'b1);
 	localparam [31:0] NUM_INT_FORMATS = fpnew_pkg_NUM_INT_FORMATS;
-	localparam [31:0] FMT_BITS = fpnew_pkg_maximum(0, 0);
+	localparam [31:0] FMT_BITS = fpnew_pkg_maximum(2, 2);
 	localparam [31:0] AUX_BITS = FMT_BITS + 2;
 	wire [NUM_LANES - 1:0] lane_in_ready;
 	wire [NUM_LANES - 1:0] lane_out_valid;
@@ -16186,10 +14879,10 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			assign conv_target_d = (dst_is_cpk ? operands_i[2 * Width+:Width] : operands_i[Width+:Width]);
 		end
 	endgenerate
-	reg [0:0] is_boxed_1op;
-	reg [1:0] is_boxed_2op;
+	reg [3:0] is_boxed_1op;
+	reg [7:0] is_boxed_2op;
 	always @(*) begin : boxed_2op
-		begin : sv2v_autoblock_122
+		begin : sv2v_autoblock_124
 			reg signed [31:0] fmt;
 			for (fmt = 0; fmt < NUM_FORMATS; fmt = fmt + 1)
 				begin
@@ -16198,12 +14891,12 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 				end
 		end
 	end
-	localparam [0:0] fpnew_pkg_CPK_FORMATS = 5'b11000;
-	function automatic [0:0] fpnew_pkg_get_conv_lane_formats;
+	localparam [0:3] fpnew_pkg_CPK_FORMATS = 5'b11000;
+	function automatic [0:3] fpnew_pkg_get_conv_lane_formats;
 		input reg [31:0] width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		input reg [31:0] lane_no;
-		reg [0:0] res;
+		reg [0:3] res;
 		reg [31:0] fmt;
 		begin
 			for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
@@ -16211,20 +14904,20 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			fpnew_pkg_get_conv_lane_formats = res;
 		end
 	endfunction
-	function automatic [0:0] fpnew_pkg_get_conv_lane_int_formats;
+	function automatic [0:3] fpnew_pkg_get_conv_lane_int_formats;
 		input reg [31:0] width;
-		input reg [0:0] cfg;
-		input reg [0:0] icfg;
+		input reg [0:3] cfg;
+		input reg [0:3] icfg;
 		input reg [31:0] lane_no;
-		reg [0:0] res;
-		reg [0:0] lanefmts;
+		reg [0:3] res;
+		reg [0:3] lanefmts;
 		begin
-			res = 1'b0;
+			res = {4 {1'sb0}};
 			lanefmts = fpnew_pkg_get_conv_lane_formats(width, cfg, lane_no);
-			begin : sv2v_autoblock_123
+			begin : sv2v_autoblock_125
 				reg [31:0] ifmt;
 				for (ifmt = 0; ifmt < fpnew_pkg_NUM_INT_FORMATS; ifmt = ifmt + 1)
-					begin : sv2v_autoblock_124
+					begin : sv2v_autoblock_126
 						reg [31:0] fmt;
 						for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
 							res[ifmt] = res[ifmt] | ((icfg[ifmt] && lanefmts[fmt]) && (fpnew_pkg_fp_width(sv2v_cast_38622(fmt)) == fpnew_pkg_int_width(sv2v_cast_E880F(ifmt))));
@@ -16233,11 +14926,11 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			fpnew_pkg_get_conv_lane_int_formats = res;
 		end
 	endfunction
-	function automatic [0:0] fpnew_pkg_get_lane_formats;
+	function automatic [0:3] fpnew_pkg_get_lane_formats;
 		input reg [31:0] width;
-		input reg [0:0] cfg;
+		input reg [0:3] cfg;
 		input reg [31:0] lane_no;
-		reg [0:0] res;
+		reg [0:3] res;
 		reg [31:0] fmt;
 		begin
 			for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
@@ -16245,20 +14938,20 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			fpnew_pkg_get_lane_formats = res;
 		end
 	endfunction
-	function automatic [0:0] fpnew_pkg_get_lane_int_formats;
+	function automatic [0:3] fpnew_pkg_get_lane_int_formats;
 		input reg [31:0] width;
-		input reg [0:0] cfg;
-		input reg [0:0] icfg;
+		input reg [0:3] cfg;
+		input reg [0:3] icfg;
 		input reg [31:0] lane_no;
-		reg [0:0] res;
-		reg [0:0] lanefmts;
+		reg [0:3] res;
+		reg [0:3] lanefmts;
 		begin
-			res = 1'b0;
+			res = {4 {1'sb0}};
 			lanefmts = fpnew_pkg_get_lane_formats(width, cfg, lane_no);
-			begin : sv2v_autoblock_125
+			begin : sv2v_autoblock_127
 				reg [31:0] ifmt;
 				for (ifmt = 0; ifmt < fpnew_pkg_NUM_INT_FORMATS; ifmt = ifmt + 1)
-					begin : sv2v_autoblock_126
+					begin : sv2v_autoblock_128
 						reg [31:0] fmt;
 						for (fmt = 0; fmt < fpnew_pkg_NUM_FP_FORMATS; fmt = fmt + 1)
 							if (fpnew_pkg_fp_width(sv2v_cast_38622(fmt)) == fpnew_pkg_int_width(sv2v_cast_E880F(ifmt)))
@@ -16278,13 +14971,13 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 		endfunction
 		for (lane = 0; lane < sv2v_cast_32_signed(NUM_LANES); lane = lane + 1) begin : gen_num_lanes
 			localparam [31:0] LANE = $unsigned(lane);
-			localparam [0:0] ACTIVE_FORMATS = fpnew_pkg_get_lane_formats(Width, FpFmtConfig, LANE);
-			localparam [0:0] ACTIVE_INT_FORMATS = fpnew_pkg_get_lane_int_formats(Width, FpFmtConfig, IntFmtConfig, LANE);
+			localparam [0:3] ACTIVE_FORMATS = fpnew_pkg_get_lane_formats(Width, FpFmtConfig, LANE);
+			localparam [0:3] ACTIVE_INT_FORMATS = fpnew_pkg_get_lane_int_formats(Width, FpFmtConfig, IntFmtConfig, LANE);
 			localparam [31:0] MAX_WIDTH = fpnew_pkg_max_fp_width(ACTIVE_FORMATS);
-			localparam [0:0] CONV_FORMATS = fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, LANE);
-			localparam [0:0] CONV_INT_FORMATS = fpnew_pkg_get_conv_lane_int_formats(Width, FpFmtConfig, IntFmtConfig, LANE);
+			localparam [0:3] CONV_FORMATS = fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, LANE);
+			localparam [0:3] CONV_INT_FORMATS = fpnew_pkg_get_conv_lane_int_formats(Width, FpFmtConfig, IntFmtConfig, LANE);
 			localparam [31:0] CONV_WIDTH = fpnew_pkg_max_fp_width(CONV_FORMATS);
-			localparam [0:0] LANE_FORMATS = (OpGroup == fpnew_pkg_CONV ? CONV_FORMATS : ACTIVE_FORMATS);
+			localparam [0:3] LANE_FORMATS = (OpGroup == fpnew_pkg_CONV ? CONV_FORMATS : ACTIVE_FORMATS);
 			localparam [31:0] LANE_WIDTH = (OpGroup == fpnew_pkg_CONV ? CONV_WIDTH : MAX_WIDTH);
 			wire [LANE_WIDTH - 1:0] local_result;
 			if ((lane == 0) || EnableVectors) begin : active_lane
@@ -16299,26 +14992,26 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 					input reg [31:0] inp;
 					sv2v_cast_32 = inp;
 				endfunction
-				function automatic [0:0] sv2v_cast_1;
-					input reg [0:0] inp;
-					sv2v_cast_1 = inp;
+				function automatic [3:0] sv2v_cast_4;
+					input reg [3:0] inp;
+					sv2v_cast_4 = inp;
 				endfunction
 				always @(*) begin : prepare_input
-					begin : sv2v_autoblock_127
+					begin : sv2v_autoblock_129
 						reg [31:0] i;
 						for (i = 0; i < NUM_OPERANDS; i = i + 1)
-							local_operands[i * sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[i * Width+:Width] >> (LANE * fpnew_pkg_fp_width(src_fmt_i));
+							local_operands[i * sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[i * Width+:Width] >> (LANE * fpnew_pkg_fp_width(src_fmt_i));
 					end
 					if (OpGroup == fpnew_pkg_CONV)
 						if (op_i == fpnew_pkg_I2F)
-							local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[0+:Width] >> (LANE * fpnew_pkg_int_width(int_fmt_i));
+							local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[0+:Width] >> (LANE * fpnew_pkg_int_width(int_fmt_i));
 						else if (op_i == fpnew_pkg_F2F) begin
 							if ((vectorial_op && op_mod_i) && is_up_cast)
-								local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[0+:Width] >> ((LANE * fpnew_pkg_fp_width(src_fmt_i)) + (MAX_FP_WIDTH / 2));
+								local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[0+:Width] >> ((LANE * fpnew_pkg_fp_width(src_fmt_i)) + (MAX_FP_WIDTH / 2));
 						end
 						else if (dst_is_cpk)
 							if (lane == 1)
-								local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[Width + (LANE_WIDTH - 1)-:LANE_WIDTH];
+								local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))] = operands_i[Width + (LANE_WIDTH - 1)-:LANE_WIDTH];
 				end
 				if (OpGroup == fpnew_pkg_ADDMUL) begin : lane_instance
 					fpnew_fma_multi_E4D0A_BE123 #(
@@ -16356,9 +15049,9 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 						input reg [31:0] inp;
 						sv2v_cast_32 = inp;
 					endfunction
-					function automatic [0:0] sv2v_cast_1;
-						input reg [0:0] inp;
-						sv2v_cast_1 = inp;
+					function automatic [3:0] sv2v_cast_4;
+						input reg [3:0] inp;
+						sv2v_cast_4 = inp;
 					endfunction
 					fpnew_divsqrt_multi_28154_735ED #(
 						.AuxType_AUX_BITS(AUX_BITS),
@@ -16368,7 +15061,7 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 					) i_fpnew_divsqrt_multi(
 						.clk_i(clk_i),
 						.rst_ni(rst_ni),
-						.operands_i(local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))))) * 2]),
+						.operands_i(local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))))) * 2]),
 						.is_boxed_i(is_boxed_2op),
 						.rnd_mode_i(rnd_mode_i),
 						.op_i(op_i),
@@ -16394,9 +15087,9 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 						input reg [31:0] inp;
 						sv2v_cast_32 = inp;
 					endfunction
-					function automatic [0:0] sv2v_cast_1;
-						input reg [0:0] inp;
-						sv2v_cast_1 = inp;
+					function automatic [3:0] sv2v_cast_4;
+						input reg [3:0] inp;
+						sv2v_cast_4 = inp;
 					endfunction
 					fpnew_cast_multi_8A35C_87530 #(
 						.AuxType_AUX_BITS(AUX_BITS),
@@ -16407,7 +15100,7 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 					) i_fpnew_cast_multi(
 						.clk_i(clk_i),
 						.rst_ni(rst_ni),
-						.operands_i(local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_1(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))]),
+						.operands_i(local_operands[0+:sv2v_cast_32((OpGroup == fpnew_pkg_CONV ? sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) : sv2v_cast_32(fpnew_pkg_max_fp_width(sv2v_cast_4(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))))))]),
 						.is_boxed_i(is_boxed_1op),
 						.rnd_mode_i(rnd_mode_i),
 						.op_i(op_i),
@@ -16432,8 +15125,8 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 				end
 				assign out_ready = out_ready_i & ((lane == 0) | result_is_vector);
 				assign lane_out_valid[lane] = out_valid & ((lane == 0) | result_is_vector);
-				function automatic [0:0] sv2v_cast_18C91;
-					input reg [0:0] inp;
+				function automatic [3:0] sv2v_cast_18C91;
+					input reg [3:0] inp;
 					sv2v_cast_18C91 = inp;
 				endfunction
 				assign local_result = (lane_out_valid[lane] ? op_result : {(OpGroup == fpnew_pkg_CONV ? fpnew_pkg_max_fp_width(sv2v_cast_18C91(fpnew_pkg_get_conv_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane))))) : fpnew_pkg_max_fp_width(sv2v_cast_18C91(fpnew_pkg_get_lane_formats(Width, FpFmtConfig, sv2v_cast_32($unsigned(lane)))))) {lane_ext_bit[0]}});
@@ -16442,8 +15135,8 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			else begin : inactive_lane
 				assign lane_out_valid[lane] = 1'b0;
 				assign lane_in_ready[lane] = 1'b0;
-				function automatic [0:0] sv2v_cast_18C91;
-					input reg [0:0] inp;
+				function automatic [3:0] sv2v_cast_18C91;
+					input reg [3:0] inp;
 					sv2v_cast_18C91 = inp;
 				endfunction
 				function automatic [31:0] sv2v_cast_32;
@@ -16456,8 +15149,8 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			end
 			genvar fmt;
 			for (fmt = 0; fmt < NUM_FORMATS; fmt = fmt + 1) begin : pack_fp_result
-				function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_38622;
-					input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+				function automatic [1:0] sv2v_cast_38622;
+					input reg [1:0] inp;
 					sv2v_cast_38622 = inp;
 				endfunction
 				localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_38622(fmt));
@@ -16472,8 +15165,8 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 			if (OpGroup == fpnew_pkg_CONV) begin : int_results_enabled
 				genvar ifmt;
 				for (ifmt = 0; ifmt < NUM_INT_FORMATS; ifmt = ifmt + 1) begin : pack_int_result
-					function automatic [fpnew_pkg_INT_FORMAT_BITS - 1:0] sv2v_cast_E880F;
-						input reg [fpnew_pkg_INT_FORMAT_BITS - 1:0] inp;
+					function automatic [1:0] sv2v_cast_E880F;
+						input reg [1:0] inp;
 						sv2v_cast_E880F = inp;
 					endfunction
 					localparam [31:0] INT_WIDTH = fpnew_pkg_int_width(sv2v_cast_E880F(ifmt));
@@ -16491,8 +15184,8 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	generate
 		genvar fmt;
 		for (fmt = 0; fmt < NUM_FORMATS; fmt = fmt + 1) begin : extend_fp_result
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_38622;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
+			function automatic [1:0] sv2v_cast_38622;
+				input reg [1:0] inp;
 				sv2v_cast_38622 = inp;
 			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_38622(fmt));
@@ -16539,7 +15232,7 @@ module fpnew_opgroup_multifmt_slice_7C482 (
 	always @(*) begin : output_processing
 		reg [4:0] temp_status;
 		temp_status = {5 {1'sb0}};
-		begin : sv2v_autoblock_128
+		begin : sv2v_autoblock_130
 			reg signed [31:0] i;
 			for (i = 0; i < sv2v_cast_32_signed(NUM_LANES); i = i + 1)
 				temp_status = temp_status | lane_status[i * 5+:5];
@@ -16614,33 +15307,33 @@ module fpnew_top_F1920 (
 	out_ready_i,
 	busy_o
 );
-	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 1;
-	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 1;
-	function automatic [0:0] sv2v_cast_1;
-		input reg [0:0] inp;
-		sv2v_cast_1 = inp;
+	localparam [31:0] fpnew_pkg_NUM_FP_FORMATS = 4;
+	localparam [31:0] fpnew_pkg_NUM_INT_FORMATS = 4;
+	function automatic [3:0] sv2v_cast_4;
+		input reg [3:0] inp;
+		sv2v_cast_4 = inp;
 	endfunction
-	localparam [35:0] fpnew_pkg_RV64D_Xsflt = {34'b0000000000000000000000000100000011, sv2v_cast_1(5'b11111), sv2v_cast_1(4'b1111)};
-	parameter [35:0] Features = fpnew_pkg_RV64D_Xsflt;
+	localparam [41:0] fpnew_pkg_RV64D_Xsflt = {34'b0000000000000000000000000100000011, sv2v_cast_4(5'b11111), 4'b1111};
+	parameter [41:0] Features = fpnew_pkg_RV64D_Xsflt;
 	localparam [31:0] fpnew_pkg_NUM_OPGROUPS = 4;
 	localparam [1:0] fpnew_pkg_BEFORE = 0;
 	localparam [1:0] fpnew_pkg_MERGED = 2;
 	localparam [1:0] fpnew_pkg_PARALLEL = 1;
-	function automatic [31:0] sv2v_cast_33F2F;
-		input reg [31:0] inp;
+	function automatic [127:0] sv2v_cast_33F2F;
+		input reg [127:0] inp;
 		sv2v_cast_33F2F = inp;
 	endfunction
-	function automatic [127:0] sv2v_cast_128;
-		input reg [127:0] inp;
-		sv2v_cast_128 = inp;
+	function automatic [511:0] sv2v_cast_512;
+		input reg [511:0] inp;
+		sv2v_cast_512 = inp;
 	endfunction
-	function automatic [7:0] sv2v_cast_8;
-		input reg [7:0] inp;
-		sv2v_cast_8 = inp;
+	function automatic [31:0] sv2v_cast_32;
+		input reg [31:0] inp;
+		sv2v_cast_32 = inp;
 	endfunction
-	localparam [137:0] fpnew_pkg_DEFAULT_NOREGS = {sv2v_cast_128({fpnew_pkg_NUM_OPGROUPS {sv2v_cast_33F2F(0)}}), sv2v_cast_8({{fpnew_pkg_PARALLEL}, {fpnew_pkg_MERGED}, {fpnew_pkg_PARALLEL}, {fpnew_pkg_MERGED}}), fpnew_pkg_BEFORE};
-	parameter [137:0] Implementation = fpnew_pkg_DEFAULT_NOREGS;
-	localparam [31:0] WIDTH = Features[35-:32];
+	localparam [545:0] fpnew_pkg_DEFAULT_NOREGS = {sv2v_cast_512({fpnew_pkg_NUM_OPGROUPS {sv2v_cast_33F2F(0)}}), sv2v_cast_32({{fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_MERGED}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_PARALLEL}}, {fpnew_pkg_NUM_FP_FORMATS {fpnew_pkg_MERGED}}}), fpnew_pkg_BEFORE};
+	parameter [545:0] Implementation = fpnew_pkg_DEFAULT_NOREGS;
+	localparam [31:0] WIDTH = Features[41-:32];
 	localparam [31:0] NUM_OPERANDS = 3;
 	input wire clk_i;
 	input wire rst_ni;
@@ -16649,11 +15342,11 @@ module fpnew_top_F1920 (
 	localparam [31:0] fpnew_pkg_OP_BITS = 4;
 	input wire [3:0] op_i;
 	input wire op_mod_i;
-	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] src_fmt_i;
-	input wire [fpnew_pkg_FP_FORMAT_BITS - 1:0] dst_fmt_i;
-	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 0;
-	input wire [fpnew_pkg_INT_FORMAT_BITS - 1:0] int_fmt_i;
+	localparam [31:0] fpnew_pkg_FP_FORMAT_BITS = 2;
+	input wire [1:0] src_fmt_i;
+	input wire [1:0] dst_fmt_i;
+	localparam [31:0] fpnew_pkg_INT_FORMAT_BITS = 2;
+	input wire [1:0] int_fmt_i;
 	input wire vectorial_op_i;
 	input wire tag_i;
 	input wire in_valid_i;
@@ -16673,7 +15366,7 @@ module fpnew_top_F1920 (
 	wire [3:0] opgrp_ext;
 	wire [3:0] opgrp_busy;
 	wire [((WIDTH + 5) >= 0 ? (4 * (WIDTH + 6)) - 1 : (4 * (1 - (WIDTH + 5))) + (WIDTH + 4)):((WIDTH + 5) >= 0 ? 0 : WIDTH + 5)] opgrp_outputs;
-	wire [2:0] is_boxed;
+	wire [11:0] is_boxed;
 	localparam [3:0] fpnew_pkg_ADD = 2;
 	localparam [1:0] fpnew_pkg_ADDMUL = 0;
 	localparam [3:0] fpnew_pkg_CLASSIFY = 9;
@@ -16704,29 +15397,29 @@ module fpnew_top_F1920 (
 		endcase
 	endfunction
 	assign in_ready_o = in_valid_i & opgrp_in_ready[fpnew_pkg_get_opgroup(op_i)];
-	localparam [63:0] fpnew_pkg_FP_ENCODINGS = 64'h0000000800000017;
+	localparam [255:0] fpnew_pkg_FP_ENCODINGS = 256'h00000008000000170000000b00000034000000050000000a0000000500000002;
 	function automatic [31:0] fpnew_pkg_fp_width;
-		input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] fmt;
-		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[(fmt * 64) + 31-:32]) + 1;
+		input reg [1:0] fmt;
+		fpnew_pkg_fp_width = (fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 63-:32] + fpnew_pkg_FP_ENCODINGS[((3 - fmt) * 64) + 31-:32]) + 1;
 	endfunction
+	function automatic signed [31:0] sv2v_cast_32_signed;
+                input reg signed [31:0] inp;
+	        sv2v_cast_32_signed = inp;
+        endfunction
+	function automatic [1:0] sv2v_cast_B5DD5;
+                input reg [1:0] inp;
+        	sv2v_cast_B5DD5 = inp;
+        endfunction
 	generate
 		genvar fmt;
-		function automatic signed [31:0] sv2v_cast_32_signed;
+		/*function automatic signed [31:0] sv2v_cast_32_signed;
 			input reg signed [31:0] inp;
 			sv2v_cast_32_signed = inp;
-		endfunction
+		endfunction*/
 		for (fmt = 0; fmt < sv2v_cast_32_signed(NUM_FORMATS); fmt = fmt + 1) begin : gen_nanbox_check
-			function automatic [fpnew_pkg_FP_FORMAT_BITS - 1:0] sv2v_cast_B5DD5;
-				input reg [fpnew_pkg_FP_FORMAT_BITS - 1:0] inp;
-				sv2v_cast_B5DD5 = inp;
-			endfunction
 			localparam [31:0] FP_WIDTH = fpnew_pkg_fp_width(sv2v_cast_B5DD5(fmt));
-			if (Features[2] && (FP_WIDTH < WIDTH)) begin : check
+			if (Features[8] && (FP_WIDTH < WIDTH)) begin : check
 				genvar op;
-				function automatic signed [31:0] sv2v_cast_32_signed;
-					input reg signed [31:0] inp;
-					sv2v_cast_32_signed = inp;
-				endfunction
 				for (op = 0; op < sv2v_cast_32_signed(NUM_OPERANDS); op = op + 1) begin : operands
 					assign is_boxed[(fmt * NUM_OPERANDS) + op] = (!vectorial_op_i ? operands_i[(op * WIDTH) + ((WIDTH - 1) >= FP_WIDTH ? WIDTH - 1 : ((WIDTH - 1) + ((WIDTH - 1) >= FP_WIDTH ? ((WIDTH - 1) - FP_WIDTH) + 1 : (FP_WIDTH - (WIDTH - 1)) + 1)) - 1)-:((WIDTH - 1) >= FP_WIDTH ? ((WIDTH - 1) - FP_WIDTH) + 1 : (FP_WIDTH - (WIDTH - 1)) + 1)] == {((WIDTH - 1) >= FP_WIDTH ? ((WIDTH - 1) - FP_WIDTH) + 1 : (FP_WIDTH - (WIDTH - 1)) + 1) {1'sb1}} : 1'b1);
 				end
@@ -16762,20 +15455,21 @@ module fpnew_top_F1920 (
 				sv2v_cast_32 = inp;
 			endfunction
 			always @(*) begin : slice_inputs
-				begin : sv2v_autoblock_129
+				begin : sv2v_autoblock_131
 					reg [31:0] fmt;
 					for (fmt = 0; fmt < NUM_FORMATS; fmt = fmt + 1)
 						input_boxed[fmt * sv2v_cast_32(fpnew_pkg_num_operands(sv2v_cast_2(opgrp)))+:sv2v_cast_32(fpnew_pkg_num_operands(sv2v_cast_2(opgrp)))] = is_boxed[(fmt * 3) + (NUM_OPS - 1)-:NUM_OPS];
 				end
 			end
+			
 			fpnew_opgroup_block_BE2AB #(
 				.OpGroup(sv2v_cast_2(opgrp)),
 				.Width(WIDTH),
-				.EnableVectors(Features[3]),
-				.FpFmtMask(Features[1-:1]),
-				.IntFmtMask(Features[0-:1]),
-				.FmtPipeRegs(Implementation[10 + (32 * (3 - opgrp))+:32]),
-				.FmtUnitTypes(Implementation[2 + (2 * (3 - opgrp))+:2]),
+				.EnableVectors(Features[9]),
+				.FpFmtMask(Features[7-:4]),
+				.IntFmtMask(Features[3-:4]),
+				.FmtPipeRegs(Implementation[34 + (32 * ((3 - opgrp) * fpnew_pkg_NUM_FP_FORMATS))+:128]),
+				.FmtUnitTypes(Implementation[2 + (2 * ((3 - opgrp) * fpnew_pkg_NUM_FP_FORMATS))+:8]),
 				.PipeConfig(Implementation[1-:2])
 			) i_opgroup_block(
 				.clk_i(clk_i),
@@ -17428,6 +16122,7 @@ module gpio (
 		.devmode_i(1'b1)
 	);
 endmodule
+
 module iccm_controller (
 	clk_i,
 	rst_ni,
@@ -17467,8 +16162,8 @@ module iccm_controller (
 	localparam [1:0] PROG = 2;
 	localparam [1:0] RESET = 0;
 	always @(*) begin
-		we_d = we_q;
-		addr_d = addr_q;
+		we_d    = we_q;
+		addr_d  = addr_q;
 		reset_d = reset_q;
 		ctrl_fsm_ns = ctrl_fsm_cs;
 		case (ctrl_fsm_cs)
@@ -17492,7 +16187,7 @@ module iccm_controller (
 				ctrl_fsm_ns = DONE;
 			end
 			DONE:
-				if ((wdata_o == 32'h00000fff) || !rst_ni) begin
+				if (wdata_o == 32'h00000fff || (!rst_ni)) begin
 					ctrl_fsm_ns = DONE;
 					reset_d = 1'b1;
 				end
@@ -17500,6 +16195,7 @@ module iccm_controller (
 					ctrl_fsm_ns = LOAD;
 				else
 					ctrl_fsm_ns = DONE;
+		//	default: ctrl_fsm_ns = RESET;
 		endcase
 	end
 	assign rx_byte_d = rx_byte_i;
@@ -17518,17 +16214,17 @@ module iccm_controller (
 			reset_q <= 1'b1;
 			byte_count <= 2'b00;
 			ctrl_fsm_cs <= DONE;
-		end
+		end 
 		else if (prog_i) begin
-			we_q <= 1'b0;
-			addr_q <= 12'b000000000000;
-			rx_byte_q0 <= 8'b00000000;
-			rx_byte_q1 <= 8'b00000000;
-			rx_byte_q2 <= 8'b00000000;
-			rx_byte_q3 <= 8'b00000000;
-			reset_q <= 1'b0;
-			byte_count <= 2'b00;
-			ctrl_fsm_cs <= RESET;
+            we_q <= 1'b0;
+            addr_q <= 12'b000000000000;
+            rx_byte_q0 <= 8'b00000000;
+            rx_byte_q1 <= 8'b00000000;
+            rx_byte_q2 <= 8'b00000000;
+            rx_byte_q3 <= 8'b00000000;
+            reset_q <= 1'b0;
+            byte_count <= 2'b00;
+            ctrl_fsm_cs <= RESET;
 		end
 		else begin
 			we_q <= we_d;
@@ -17604,7 +16300,7 @@ module instr_mem_top (
 	assign mask_sel[1] = (tl_wmask[15:8] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign mask_sel[2] = (tl_wmask[23:16] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign mask_sel[3] = (tl_wmask[31:24] != 8'b00000000 ? 1'b1 : 1'b0);
-	assign csb = ~(prog_rst_ni ? tl_req : iccm_ctrl_we);
+	assign csb = ~1'b1;
 	assign addr_o = (prog_rst_ni ? tl_addr : iccm_ctrl_addr);
 	assign wdata_o = (prog_rst_ni ? tl_wdata : iccm_ctrl_wdata);
 	assign we_o = ~(prog_rst_ni ? tl_we : iccm_ctrl_we);
@@ -17697,7 +16393,7 @@ module lzc (
 			wire [((2 ** NumLevels) * NumLevels) - 1:0] index_nodes;
 			reg [WIDTH - 1:0] in_tmp;
 			always @(*) begin : flip_vector
-				begin : sv2v_autoblock_130
+				begin : sv2v_autoblock_132
 					reg [31:0] i;
 					for (i = 0; i < WIDTH; i = i + 1)
 						in_tmp[i] = (MODE ? in_i[(WIDTH - 1) - i] : in_i[i]);
@@ -18538,7 +17234,7 @@ module prim_arbiter_ppc (
 			assign arb_req = (|masked_req ? masked_req : req_i);
 			always @(*) begin
 				ppc_out[0] = arb_req[0];
-				begin : sv2v_autoblock_131
+				begin : sv2v_autoblock_133
 					reg signed [31:0] i;
 					for (i = 1; i < N; i = i + 1)
 						ppc_out[i] = ppc_out[i - 1] | arb_req[i];
@@ -18558,7 +17254,7 @@ module prim_arbiter_ppc (
 			if (EnDataPort == 1) begin : gen_datapath
 				always @(*) begin
 					data_o = {DW {1'sb0}};
-					begin : sv2v_autoblock_132
+					begin : sv2v_autoblock_134
 						reg signed [31:0] i;
 						for (i = 0; i < N; i = i + 1)
 							if (winner[i])
@@ -18573,7 +17269,7 @@ module prim_arbiter_ppc (
 			end
 			always @(*) begin
 				idx_o = {IdxW {1'sb0}};
-				begin : sv2v_autoblock_133
+				begin : sv2v_autoblock_135
 					reg [31:0] i;
 					for (i = 0; i < N; i = i + 1)
 						if (winner[i])
@@ -18598,6 +17294,13 @@ module prim_clock_gating (
 		.GCLK(clk_o),
 		.GATE(en_i | test_en_i)
 	);
+  /*reg en_latch;
+  always @(*) begin
+    if (!clk_i) begin
+      en_latch = en_i | test_en_i;
+    end
+  end
+  assign clk_o = en_latch & clk_i;*/
 endmodule
 module prim_filter_ctr (
 	clk_i,
@@ -18635,7 +17338,7 @@ module prim_filter_ctr (
 			stored_value_q <= filter_i;
 	always @(posedge clk_i or negedge rst_ni)
 		if (!rst_ni)
-			diff_ctr_q <= {CTR_WIDTH {1'b0}};
+			diff_ctr_q <= {CTR_WIDTH {1'sb0}};
 		else
 			diff_ctr_q <= diff_ctr_d;
 	assign diff_ctr_d = (filter_i != filter_q ? {CTR_WIDTH {1'sb0}} : (diff_ctr_q == CYCLESM1 ? CYCLESM1 : diff_ctr_q + 1'b1));
@@ -19529,303 +18232,7 @@ module rr_arb_tree_CBEBF_6E668 (
 		end
 	endgenerate
 endmodule
-module rstmgr (
-	clk_i,
-	rst_ni,
-	prog_rst_ni,
-	ndmreset,
-	sys_rst_ni
-);
-	input wire clk_i;
-	input wire rst_ni;
-	input wire prog_rst_ni;
-	input wire ndmreset;
-	output reg sys_rst_ni;
-	always @(*)
-		if (!rst_ni)
-			sys_rst_ni = 1'b0;
-		else if (!prog_rst_ni)
-			sys_rst_ni = 1'b0;
-		else if (ndmreset)
-			sys_rst_ni = 1'b0;
-		else
-			sys_rst_ni = prog_rst_ni;
-endmodule
-module rv_dm (
-	clk_i,
-	rst_ni,
-	testmode_i,
-	ndmreset_o,
-	dmactive_o,
-	debug_req_o,
-	unavailable_i,
-	tl_d_i,
-	tl_d_o,
-	tl_h_o,
-	tl_h_i,
-	jtag_req_i,
-	jtag_rsp_o
-);
-	parameter signed [31:0] NrHarts = 1;
-	parameter [31:0] IdcodeValue = 32'h00000001;
-	parameter [0:0] DirectDmiTap = 1'b1;
-	input wire clk_i;
-	input wire rst_ni;
-	input wire testmode_i;
-	output wire ndmreset_o;
-	output wire dmactive_o;
-	output wire [NrHarts - 1:0] debug_req_o;
-	input wire [NrHarts - 1:0] unavailable_i;
-	localparam signed [31:0] tlul_pkg_TL_AIW = 8;
-	localparam signed [31:0] tlul_pkg_TL_AW = 32;
-	localparam signed [31:0] tlul_pkg_TL_DW = 32;
-	localparam signed [31:0] tlul_pkg_TL_DBW = 4;
-	localparam signed [31:0] tlul_pkg_TL_SZW = 2;
-	input wire [85:0] tl_d_i;
-	localparam signed [31:0] tlul_pkg_TL_DIW = 1;
-	output wire [51:0] tl_d_o;
-	output wire [85:0] tl_h_o;
-	input wire [51:0] tl_h_i;
-	input wire [3:0] jtag_req_i;
-	output wire [1:0] jtag_rsp_o;
-	localparam signed [31:0] BusWidth = 32;
-	localparam [NrHarts - 1:0] SelectableHarts = {NrHarts {1'b1}};
-	wire [(NrHarts * 32) - 1:0] hartinfo;
-	wire [NrHarts - 1:0] halted;
-	wire [NrHarts - 1:0] resumeack;
-	wire [NrHarts - 1:0] haltreq;
-	wire [NrHarts - 1:0] resumereq;
-	wire clear_resumeack;
-	wire cmd_valid;
-	wire [31:0] cmd;
-	wire cmderror_valid;
-	wire [2:0] cmderror;
-	wire cmdbusy;
-	localparam [4:0] dm_ProgBufSize = 5'h08;
-	wire [(dm_ProgBufSize * 32) - 1:0] progbuf;
-	localparam [3:0] dm_DataCount = 4'h2;
-	wire [(dm_DataCount * 32) - 1:0] data_csrs_mem;
-	wire [(dm_DataCount * 32) - 1:0] data_mem_csrs;
-	wire data_valid;
-	wire [19:0] hartsel;
-	wire [31:0] sbaddress_csrs_sba;
-	wire [31:0] sbaddress_sba_csrs;
-	wire sbaddress_write_valid;
-	wire sbreadonaddr;
-	wire sbautoincrement;
-	wire [2:0] sbaccess;
-	wire sbreadondata;
-	wire [31:0] sbdata_write;
-	wire sbdata_read_valid;
-	wire sbdata_write_valid;
-	wire [31:0] sbdata_read;
-	wire sbdata_valid;
-	wire sbbusy;
-	wire sberror_valid;
-	wire [2:0] sberror;
-	wire [40:0] dmi_req;
-	wire [33:0] dmi_rsp;
-	wire dmi_req_valid;
-	wire dmi_req_ready;
-	wire dmi_rsp_valid;
-	wire dmi_rsp_ready;
-	wire dmi_rst_n;
-	localparam [11:0] dm_DataAddr = 12'h380;
-	localparam [31:0] DebugHartInfo = {16'b0000000000100001, dm_DataCount, dm_DataAddr};
-	generate
-		genvar i;
-		for (i = 0; i < NrHarts; i = i + 1) begin : gen_dm_hart_ctrl
-			assign hartinfo[i * 32+:32] = DebugHartInfo;
-		end
-	endgenerate
-	dm_csrs #(
-		.NrHarts(NrHarts),
-		.BusWidth(BusWidth),
-		.SelectableHarts(SelectableHarts)
-	) i_dm_csrs(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.testmode_i(testmode_i),
-		.dmi_rst_ni(dmi_rst_n),
-		.dmi_req_valid_i(dmi_req_valid),
-		.dmi_req_ready_o(dmi_req_ready),
-		.dmi_req_i(dmi_req),
-		.dmi_resp_valid_o(dmi_rsp_valid),
-		.dmi_resp_ready_i(dmi_rsp_ready),
-		.dmi_resp_o(dmi_rsp),
-		.ndmreset_o(ndmreset_o),
-		.dmactive_o(dmactive_o),
-		.hartsel_o(hartsel),
-		.hartinfo_i(hartinfo),
-		.halted_i(halted),
-		.unavailable_i(unavailable_i),
-		.resumeack_i(resumeack),
-		.haltreq_o(haltreq),
-		.resumereq_o(resumereq),
-		.clear_resumeack_o(clear_resumeack),
-		.cmd_valid_o(cmd_valid),
-		.cmd_o(cmd),
-		.cmderror_valid_i(cmderror_valid),
-		.cmderror_i(cmderror),
-		.cmdbusy_i(cmdbusy),
-		.progbuf_o(progbuf),
-		.data_i(data_mem_csrs),
-		.data_valid_i(data_valid),
-		.data_o(data_csrs_mem),
-		.sbaddress_o(sbaddress_csrs_sba),
-		.sbaddress_i(sbaddress_sba_csrs),
-		.sbaddress_write_valid_o(sbaddress_write_valid),
-		.sbreadonaddr_o(sbreadonaddr),
-		.sbautoincrement_o(sbautoincrement),
-		.sbaccess_o(sbaccess),
-		.sbreadondata_o(sbreadondata),
-		.sbdata_o(sbdata_write),
-		.sbdata_read_valid_o(sbdata_read_valid),
-		.sbdata_write_valid_o(sbdata_write_valid),
-		.sbdata_i(sbdata_read),
-		.sbdata_valid_i(sbdata_valid),
-		.sbbusy_i(sbbusy),
-		.sberror_valid_i(sberror_valid),
-		.sberror_i(sberror)
-	);
-	wire host_req;
-	wire [31:0] host_add;
-	wire host_we;
-	wire [31:0] host_wdata;
-	wire [3:0] host_be;
-	wire host_gnt;
-	wire host_r_valid;
-	wire [31:0] host_r_rdata;
-	wire host_r_err;
-	dm_sba #(.BusWidth(BusWidth)) i_dm_sba(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.master_req_o(host_req),
-		.master_add_o(host_add),
-		.master_we_o(host_we),
-		.master_wdata_o(host_wdata),
-		.master_be_o(host_be),
-		.master_gnt_i(host_gnt),
-		.master_r_valid_i(host_r_valid),
-		.master_r_rdata_i(host_r_rdata),
-		.dmactive_i(dmactive_o),
-		.sbaddress_i(sbaddress_csrs_sba),
-		.sbaddress_o(sbaddress_sba_csrs),
-		.sbaddress_write_valid_i(sbaddress_write_valid),
-		.sbreadonaddr_i(sbreadonaddr),
-		.sbautoincrement_i(sbautoincrement),
-		.sbaccess_i(sbaccess),
-		.sbreadondata_i(sbreadondata),
-		.sbdata_i(sbdata_write),
-		.sbdata_read_valid_i(sbdata_read_valid),
-		.sbdata_write_valid_i(sbdata_write_valid),
-		.sbdata_o(sbdata_read),
-		.sbdata_valid_o(sbdata_valid),
-		.sbbusy_o(sbbusy),
-		.sberror_valid_o(sberror_valid),
-		.sberror_o(sberror)
-	);
-	tlul_host_adapter #(.MAX_REQS(1)) tl_adapter_host_sba(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.req_i(host_req),
-		.gnt_o(host_gnt),
-		.addr_i(host_add),
-		.we_i(host_we),
-		.wdata_i(host_wdata),
-		.be_i(host_be),
-		.valid_o(host_r_valid),
-		.rdata_o(host_r_rdata),
-		.err_o(host_r_err),
-		.tl_h_c_a(tl_h_o),
-		.tl_h_c_d(tl_h_i)
-	);
-	localparam [31:0] AddressWidthWords = 30;
-	wire req;
-	wire we;
-	wire [3:0] be;
-	wire [31:0] wdata;
-	wire [31:0] rdata;
-	reg rvalid;
-	wire [31:0] addr_b;
-	wire [29:0] addr_w;
-	assign be = {4 {1'b1}};
-	assign addr_b = {addr_w, {2 {1'b0}}};
-	dm_mem #(
-		.NrHarts(NrHarts),
-		.BusWidth(BusWidth),
-		.SelectableHarts(SelectableHarts),
-		.DmBaseAddress(1)
-	) i_dm_mem(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.debug_req_o(debug_req_o),
-		.hartsel_i(hartsel),
-		.haltreq_i(haltreq),
-		.resumereq_i(resumereq),
-		.clear_resumeack_i(clear_resumeack),
-		.halted_o(halted),
-		.resuming_o(resumeack),
-		.cmd_valid_i(cmd_valid),
-		.cmd_i(cmd),
-		.cmderror_valid_o(cmderror_valid),
-		.cmderror_o(cmderror),
-		.cmdbusy_o(cmdbusy),
-		.progbuf_i(progbuf),
-		.data_i(data_csrs_mem),
-		.data_o(data_mem_csrs),
-		.data_valid_o(data_valid),
-		.req_i(req),
-		.we_i(we),
-		.addr_i(addr_b),
-		.wdata_i(wdata),
-		.be_i(be),
-		.rdata_o(rdata)
-	);
-	dmi_jtag #(.IdcodeValue(IdcodeValue)) dap(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.testmode_i(testmode_i),
-		.dmi_rst_no(dmi_rst_n),
-		.dmi_req_o(dmi_req),
-		.dmi_req_valid_o(dmi_req_valid),
-		.dmi_req_ready_i(dmi_req_ready),
-		.dmi_resp_i(dmi_rsp),
-		.dmi_resp_ready_o(dmi_rsp_ready),
-		.dmi_resp_valid_i(dmi_rsp_valid),
-		.tck_i(jtag_req_i[3]),
-		.tms_i(jtag_req_i[2]),
-		.trst_ni(jtag_req_i[1]),
-		.td_i(jtag_req_i[0]),
-		.td_o(jtag_rsp_o[1]),
-		.tdo_oe_o(jtag_rsp_o[0])
-	);
-	tlul_sram_adapter #(
-		.SramAw(AddressWidthWords),
-		.SramDw(BusWidth),
-		.Outstanding(1),
-		.ByteAccess(0)
-	) tl_adapter_device_mem(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.req_o(req),
-		.gnt_i(1'b1),
-		.we_o(we),
-		.addr_o(addr_w),
-		.wdata_o(wdata),
-		.wmask_o(),
-		.rdata_i(rdata),
-		.rvalid_i(rvalid),
-		.rerror_i(2'b00),
-		.tl_o(tl_d_o),
-		.tl_i(tl_d_i)
-	);
-	always @(posedge clk_i or negedge rst_ni)
-		if (!rst_ni)
-			rvalid <= 1'b0;
-		else
-			rvalid <= req & ~we;
-endmodule
+
 module rv_plic_gateway (
 	clk_i,
 	rst_ni,
@@ -19851,7 +18258,7 @@ module rv_plic_gateway (
 			src_q <= {N_SOURCE {1'sb0}};
 		else
 			src_q <= src_i;
-	always @(*) begin : sv2v_autoblock_134
+	always @(*) begin : sv2v_autoblock_136
 		reg signed [31:0] i;
 		for (i = 0; i < N_SOURCE; i = i + 1)
 			set[i] = (le_i[i] ? src_i[i] & ~src_q[i] : src_i[i]);
@@ -23126,7 +21533,7 @@ module rv_plic (
 	assign cc_id = irq_id_o;
 	always @(*) begin
 		claim = {36 {1'sb0}};
-		begin : sv2v_autoblock_135
+		begin : sv2v_autoblock_137
 			reg signed [31:0] i;
 			for (i = 0; i < rv_plic_reg_pkg_NumTarget; i = i + 1)
 				if (claim_re[i])
@@ -23135,7 +21542,7 @@ module rv_plic (
 	end
 	always @(*) begin
 		complete = {36 {1'sb0}};
-		begin : sv2v_autoblock_136
+		begin : sv2v_autoblock_138
 			reg signed [31:0] i;
 			for (i = 0; i < rv_plic_reg_pkg_NumTarget; i = i + 1)
 				if (complete_we[i])
@@ -23726,88 +22133,6 @@ module rv_timer (
 		.devmode_i(1'b1)
 	);
 endmodule
-/*
-module sky130_sram_4kbyte_1rw1r_32x1024_8 (
-	clk0,
-	csb0,
-	web0,
-	wmask0,
-	addr0,
-	din0,
-	dout0,
-	clk1,
-	csb1,
-	addr1,
-	dout1
-);
-	parameter NUM_WMASKS = 4;
-	parameter DATA_WIDTH = 32;
-	parameter ADDR_WIDTH = 10;
-	parameter RAM_DEPTH = 1 << ADDR_WIDTH;
-	parameter DELAY = 3;
-	parameter VERBOSE = 1;
-	parameter T_HOLD = 1;
-	input clk0;
-	input csb0;
-	input web0;
-	input [NUM_WMASKS - 1:0] wmask0;
-	input [ADDR_WIDTH - 1:0] addr0;
-	input [DATA_WIDTH - 1:0] din0;
-	output [DATA_WIDTH - 1:0] dout0;
-	input clk1;
-	input csb1;
-	input [ADDR_WIDTH - 1:0] addr1;
-	output [DATA_WIDTH - 1:0] dout1;
-	reg csb0_reg;
-	reg web0_reg;
-	reg [NUM_WMASKS - 1:0] wmask0_reg;
-	reg [ADDR_WIDTH - 1:0] addr0_reg;
-	reg [DATA_WIDTH - 1:0] din0_reg;
-	reg [DATA_WIDTH - 1:0] mem [0:RAM_DEPTH - 1];
-	always @(posedge clk0) begin
-		csb0_reg = csb0;
-		web0_reg = web0;
-		wmask0_reg = wmask0;
-		addr0_reg = addr0;
-		din0_reg = din0;
-		#(T_HOLD) dout0 = 32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
-		if ((!csb0_reg && web0_reg) && VERBOSE)
-			$display($time, " Reading %m addr0=%b dout0=%b", addr0_reg, mem[addr0_reg]);
-		if ((!csb0_reg && !web0_reg) && VERBOSE)
-			$display($time, " Writing %m addr0=%b din0=%b wmask0=%b", addr0_reg, din0_reg, wmask0_reg);
-	end
-	reg csb1_reg;
-	reg [ADDR_WIDTH - 1:0] addr1_reg;
-	always @(posedge clk1) begin
-		csb1_reg = csb1;
-		addr1_reg = addr1;
-		if (((!csb0 && !web0) && !csb1) && (addr0 == addr1))
-			$display($time, " WARNING: Writing and reading addr0=%b and addr1=%b simultaneously!", addr0, addr1);
-		#(T_HOLD) dout1 = 32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
-		if (!csb1_reg && VERBOSE)
-			$display($time, " Reading %m addr1=%b dout1=%b", addr1_reg, mem[addr1_reg]);
-	end
-	always @(negedge clk0) begin : MEM_WRITE0
-		if (!csb0_reg && !web0_reg) begin
-			if (wmask0_reg[0])
-				mem[addr0_reg][7:0] = din0_reg[7:0];
-			if (wmask0_reg[1])
-				mem[addr0_reg][15:8] = din0_reg[15:8];
-			if (wmask0_reg[2])
-				mem[addr0_reg][23:16] = din0_reg[23:16];
-			if (wmask0_reg[3])
-				mem[addr0_reg][31:24] = din0_reg[31:24];
-		end
-	end
-	always @(negedge clk0) begin : MEM_READ0
-		if (!csb0_reg && web0_reg)
-			dout0 <= #(DELAY) mem[addr0_reg];
-	end
-	always @(negedge clk1) begin : MEM_READ1
-		if (!csb1_reg)
-			dout1 <= #(DELAY) mem[addr1_reg];
-	end
-endmodule*/
 module spi_clgen (
 	clk_i,
 	rst_ni,
@@ -24580,10 +22905,10 @@ module tlul_host_adapter (
 	localparam signed [31:0] WordSize = 2;
 	wire [7:0] tl_source;
 	wire [3:0] tl_be;
-	function automatic [7:0] sv2v_cast_8;
-               input reg [7:0] inp;
-               sv2v_cast_8 = inp;
-        endfunction
+	 function automatic [7:0] sv2v_cast_8;
+                                input reg [7:0] inp;
+                                sv2v_cast_8 = inp;
+                        endfunction
 	generate
 		if (MAX_REQS == 1) begin
 			assign tl_source = {8 {1'sb0}};
@@ -24605,6 +22930,10 @@ module tlul_host_adapter (
 					else
 						source_d = source_q + 1;
 			end
+			/*function automatic [7:0] sv2v_cast_8;
+				input reg [7:0] inp;
+				sv2v_cast_8 = inp;
+			endfunction*/
 			assign tl_source = sv2v_cast_8(source_q);
 		end
 	endgenerate
@@ -24734,7 +23063,7 @@ module tlul_socket_1n (
 	endfunction
 	always @(*) begin
 		hfifo_reqready = tl_u_i[N][0];
-		begin : sv2v_autoblock_137
+		begin : sv2v_autoblock_139
 			reg signed [31:0] idx;
 			for (idx = 0; idx < N; idx = idx + 1)
 				if (dev_select_t == sv2v_cast_BB804_signed(idx))
@@ -24746,7 +23075,7 @@ module tlul_socket_1n (
 	assign tl_t_i[0] = tl_t_o[85] & hfifo_reqready;
 	always @(*) begin
 		tl_t_p = tl_u_i[N];
-		begin : sv2v_autoblock_138
+		begin : sv2v_autoblock_140
 			reg signed [31:0] idx;
 			for (idx = 0; idx < N; idx = idx + 1)
 				if (dev_select_outstanding == sv2v_cast_BB804_signed(idx))
@@ -25169,7 +23498,7 @@ module tlul_sram_adapter (
 	always @(*) begin
 		wmask_int = {WidthMult * tlul_pkg_TL_DW {1'sb0}};
 		wdata_int = {WidthMult * tlul_pkg_TL_DW {1'sb0}};
-		if (tl_i[85]) begin : sv2v_autoblock_139
+		if (tl_i[85]) begin : sv2v_autoblock_141
 			reg signed [31:0] i;
 			for (i = 0; i < 4; i = i + 1)
 				begin
@@ -25220,7 +23549,7 @@ module tlul_sram_adapter (
 	wire [31:0] rdata_tlword;
 	always @(*) begin
 		rmask = {WidthMult * tlul_pkg_TL_DW {1'sb0}};
-		begin : sv2v_autoblock_140
+		begin : sv2v_autoblock_142
 			reg signed [31:0] i;
 			for (i = 0; i < 4; i = i + 1)
 				rmask[(sramreqfifo_rdata[WoffsetWidth - 1-:WoffsetWidth] * 32) + (8 * i)+:8] = {8 {sramreqfifo_rdata[(tlul_pkg_TL_DBW + (WoffsetWidth - 1)) - (3 - i)]}};
@@ -25283,380 +23612,6 @@ module tlul_sram_adapter (
 		.rvalid_o(rspfifo_rvalid),
 		.rready_i(rspfifo_rready),
 		.rdata_o(rspfifo_rdata)
-	);
-endmodule
-module tl_xbar_main (
-	clk_i,
-	rst_ni,
-	tl_brqif_i,
-	tl_brqif_o,
-	tl_brqlsu_i,
-	tl_brqlsu_o,
-	tl_dm_sba_i,
-	tl_dm_sba_o,
-	tl_iccm_o,
-	tl_iccm_i,
-	tl_debug_rom_o,
-	tl_debug_rom_i,
-	tl_dccm_o,
-	tl_dccm_i,
-	tl_timer0_o,
-	tl_timer0_i,
-	tl_uart_o,
-	tl_uart_i,
-	tl_spi_o,
-	tl_spi_i,
-	tl_pwm_o,
-	tl_pwm_i,
-	tl_gpio_o,
-	tl_gpio_i,
-	tl_plic_o,
-	tl_plic_i
-);
-	input wire clk_i;
-	input wire rst_ni;
-	localparam signed [31:0] tlul_pkg_TL_AIW = 8;
-	localparam signed [31:0] tlul_pkg_TL_AW = 32;
-	localparam signed [31:0] tlul_pkg_TL_DW = 32;
-	localparam signed [31:0] tlul_pkg_TL_DBW = 4;
-	localparam signed [31:0] tlul_pkg_TL_SZW = 2;
-	input wire [85:0] tl_brqif_i;
-	localparam signed [31:0] tlul_pkg_TL_DIW = 1;
-	output wire [51:0] tl_brqif_o;
-	input wire [85:0] tl_brqlsu_i;
-	output wire [51:0] tl_brqlsu_o;
-	input wire [85:0] tl_dm_sba_i;
-	output wire [51:0] tl_dm_sba_o;
-	output wire [85:0] tl_iccm_o;
-	input wire [51:0] tl_iccm_i;
-	output wire [85:0] tl_debug_rom_o;
-	input wire [51:0] tl_debug_rom_i;
-	output wire [85:0] tl_dccm_o;
-	input wire [51:0] tl_dccm_i;
-	output wire [85:0] tl_timer0_o;
-	input wire [51:0] tl_timer0_i;
-	output wire [85:0] tl_uart_o;
-	input wire [51:0] tl_uart_i;
-	output wire [85:0] tl_spi_o;
-	input wire [51:0] tl_spi_i;
-	output wire [85:0] tl_pwm_o;
-	input wire [51:0] tl_pwm_i;
-	output wire [85:0] tl_gpio_o;
-	input wire [51:0] tl_gpio_i;
-	output wire [85:0] tl_plic_o;
-	input wire [51:0] tl_plic_i;
-	wire [85:0] brqifu_to_s1n;
-	wire [51:0] s1n_to_brqifu;
-	reg [1:0] device_sel_1;
-	wire [85:0] brqlsu_to_s1n;
-	wire [51:0] s1n_to_brqlsu;
-	reg [3:0] device_sel_2;
-	wire [85:0] dbg_to_s1n;
-	wire [51:0] s1n_to_dbg;
-	reg [3:0] device_sel_3;
-	wire [171:0] h1_dv_i;
-	wire [103:0] h1_dv_o;
-	wire [773:0] h2_dv_i;
-	wire [467:0] h2_dv_o;
-	wire [687:0] h3_dv_i;
-	wire [415:0] h3_dv_o;
-	wire [257:0] s1n_sm1_1;
-	wire [155:0] sm1_s1n_1;
-	wire [171:0] s1n_sm1_2;
-	wire [103:0] sm1_s1n_2;
-	wire [171:0] s1n_sm1_4;
-	wire [103:0] sm1_s1n_4;
-	wire [171:0] s1n_sm1_5;
-	wire [103:0] sm1_s1n_5;
-	wire [171:0] s1n_sm1_6;
-	wire [103:0] sm1_s1n_6;
-	wire [171:0] s1n_sm1_7;
-	wire [103:0] sm1_s1n_7;
-	wire [171:0] s1n_sm1_8;
-	wire [103:0] sm1_s1n_8;
-	wire [171:0] s1n_sm1_9;
-	wire [103:0] sm1_s1n_9;
-	wire [171:0] s1n_sm1_10;
-	wire [103:0] sm1_s1n_10;
-	assign h1_dv_o[52+:52] = sm1_s1n_1[104+:52];
-	assign h3_dv_o[312+:52] = sm1_s1n_1[52+:52];
-	assign h2_dv_o[0+:52] = sm1_s1n_1[0+:52];
-	assign s1n_sm1_1[172+:86] = h1_dv_i[86+:86];
-	assign s1n_sm1_1[86+:86] = h3_dv_i[516+:86];
-	assign s1n_sm1_1[0+:86] = h2_dv_i[0+:86];
-	assign h2_dv_o[416+:52] = sm1_s1n_2[52+:52];
-	assign h3_dv_o[364+:52] = sm1_s1n_2[0+:52];
-	assign s1n_sm1_2[86+:86] = h2_dv_i[688+:86];
-	assign s1n_sm1_2[0+:86] = h3_dv_i[602+:86];
-	assign h1_dv_o[0+:52] = sm1_s1n_4[52+:52];
-	assign h2_dv_o[364+:52] = sm1_s1n_4[0+:52];
-	assign s1n_sm1_4[86+:86] = h1_dv_i[0+:86];
-	assign s1n_sm1_4[0+:86] = h2_dv_i[602+:86];
-	assign h2_dv_o[312+:52] = sm1_s1n_5[52+:52];
-	assign h3_dv_o[260+:52] = sm1_s1n_5[0+:52];
-	assign s1n_sm1_5[86+:86] = h2_dv_i[516+:86];
-	assign s1n_sm1_5[0+:86] = h3_dv_i[430+:86];
-	assign h2_dv_o[260+:52] = sm1_s1n_6[52+:52];
-	assign h3_dv_o[208+:52] = sm1_s1n_6[0+:52];
-	assign s1n_sm1_6[86+:86] = h2_dv_i[430+:86];
-	assign s1n_sm1_6[0+:86] = h3_dv_i[344+:86];
-	assign h2_dv_o[208+:52] = sm1_s1n_7[52+:52];
-	assign h3_dv_o[156+:52] = sm1_s1n_7[0+:52];
-	assign s1n_sm1_7[86+:86] = h2_dv_i[344+:86];
-	assign s1n_sm1_7[0+:86] = h3_dv_i[258+:86];
-	assign h2_dv_o[156+:52] = sm1_s1n_8[52+:52];
-	assign h3_dv_o[104+:52] = sm1_s1n_8[0+:52];
-	assign s1n_sm1_8[86+:86] = h2_dv_i[258+:86];
-	assign s1n_sm1_8[0+:86] = h3_dv_i[172+:86];
-	assign h2_dv_o[104+:52] = sm1_s1n_9[52+:52];
-	assign h3_dv_o[52+:52] = sm1_s1n_9[0+:52];
-	assign s1n_sm1_9[86+:86] = h2_dv_i[172+:86];
-	assign s1n_sm1_9[0+:86] = h3_dv_i[86+:86];
-	assign h2_dv_o[52+:52] = sm1_s1n_10[52+:52];
-	assign h3_dv_o[0+:52] = sm1_s1n_10[0+:52];
-	assign s1n_sm1_10[86+:86] = h2_dv_i[86+:86];
-	assign s1n_sm1_10[0+:86] = h3_dv_i[0+:86];
-	assign brqifu_to_s1n = tl_brqif_i;
-	assign tl_brqif_o = s1n_to_brqifu;
-	assign brqlsu_to_s1n = tl_brqlsu_i;
-	assign tl_brqlsu_o = s1n_to_brqlsu;
-	assign dbg_to_s1n = tl_dm_sba_i;
-	assign tl_dm_sba_o = s1n_to_dbg;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_DEBUG_ROM = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_ICCM = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_DEBUG_ROM = 32'h10040000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_ICCM = 32'h20000000;
-	always @(*) begin
-		device_sel_1 = 2'd2;
-		if ((brqifu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_ICCM) == tl_main_pkg_ADDR_SPACE_ICCM)
-			device_sel_1 = 2'd0;
-		else if ((brqifu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_DEBUG_ROM) == tl_main_pkg_ADDR_SPACE_DEBUG_ROM)
-			device_sel_1 = 2'd1;
-	end
-	tlul_socket_1n #(
-		.HReqDepth(4'h0),
-		.HRspDepth(4'h0),
-		.DReqDepth(12'h000),
-		.DRspDepth(12'h000),
-		.N(2)
-	) host_1(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(brqifu_to_s1n),
-		.tl_h_o(s1n_to_brqifu),
-		.tl_d_o(h1_dv_i),
-		.tl_d_i(h1_dv_o),
-		.dev_select_i(device_sel_1)
-	);
-	localparam [31:0] tl_main_pkg_ADDR_MASK_DCCM = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_GPIO = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_PLIC = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_PWM = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_SPI0 = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_TIMER0 = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_MASK_UART0 = 32'h0000ffff;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_DCCM = 32'h10000000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_GPIO = 32'h400c0000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_PLIC = 32'h40050000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_PWM = 32'h400b0000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_SPI0 = 32'h40080000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_TIMER0 = 32'h40000000;
-	localparam [31:0] tl_main_pkg_ADDR_SPACE_UART0 = 32'h40060000;
-	always @(*) begin
-		device_sel_2 = 4'd9;
-		if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_DCCM) == tl_main_pkg_ADDR_SPACE_DCCM)
-			device_sel_2 = 4'd0;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_DEBUG_ROM) == tl_main_pkg_ADDR_SPACE_DEBUG_ROM)
-			device_sel_2 = 4'd1;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_TIMER0) == tl_main_pkg_ADDR_SPACE_TIMER0)
-			device_sel_2 = 4'd2;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_UART0) == tl_main_pkg_ADDR_SPACE_UART0)
-			device_sel_2 = 4'd3;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_SPI0) == tl_main_pkg_ADDR_SPACE_SPI0)
-			device_sel_2 = 4'd4;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PWM) == tl_main_pkg_ADDR_SPACE_PWM)
-			device_sel_2 = 4'd5;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_GPIO) == tl_main_pkg_ADDR_SPACE_GPIO)
-			device_sel_2 = 4'd6;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PLIC) == tl_main_pkg_ADDR_SPACE_PLIC)
-			device_sel_2 = 4'd7;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_ICCM) == tl_main_pkg_ADDR_SPACE_ICCM)
-			device_sel_2 = 4'd8;
-	end
-	tlul_socket_1n #(
-		.HReqDepth(4'h0),
-		.HRspDepth(4'h0),
-		.DReqDepth(36'h000000000),
-		.DRspDepth(36'h000000000),
-		.N(9)
-	) host_2(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(brqlsu_to_s1n),
-		.tl_h_o(s1n_to_brqlsu),
-		.tl_d_o(h2_dv_i),
-		.tl_d_i(h2_dv_o),
-		.dev_select_i(device_sel_2)
-	);
-	always @(*) begin
-		device_sel_3 = 4'd8;
-		if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_DCCM) == tl_main_pkg_ADDR_SPACE_DCCM)
-			device_sel_3 = 4'd0;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_ICCM) == tl_main_pkg_ADDR_SPACE_ICCM)
-			device_sel_3 = 4'd1;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_TIMER0) == tl_main_pkg_ADDR_SPACE_TIMER0)
-			device_sel_3 = 4'd2;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_UART0) == tl_main_pkg_ADDR_SPACE_UART0)
-			device_sel_3 = 4'd3;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_SPI0) == tl_main_pkg_ADDR_SPACE_SPI0)
-			device_sel_3 = 4'd4;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PWM) == tl_main_pkg_ADDR_SPACE_PWM)
-			device_sel_3 = 4'd5;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_GPIO) == tl_main_pkg_ADDR_SPACE_GPIO)
-			device_sel_3 = 4'd6;
-		else if ((brqlsu_to_s1n[68-:32] & ~tl_main_pkg_ADDR_MASK_PLIC) == tl_main_pkg_ADDR_SPACE_PLIC)
-			device_sel_3 = 4'd7;
-	end
-	tlul_socket_1n #(
-		.HReqDepth(4'h0),
-		.HRspDepth(4'h0),
-		.DReqDepth(36'h000000000),
-		.DRspDepth(36'h000000000),
-		.N(8)
-	) host_3(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(dbg_to_s1n),
-		.tl_h_o(s1n_to_dbg),
-		.tl_d_o(h3_dv_i),
-		.tl_d_i(h3_dv_o),
-		.dev_select_i(device_sel_3)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(3)
-	) ICCM(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_1),
-		.tl_h_o(sm1_s1n_1),
-		.tl_d_o(tl_iccm_o),
-		.tl_d_i(tl_iccm_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) DCCM(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_2),
-		.tl_h_o(sm1_s1n_2),
-		.tl_d_o(tl_dccm_o),
-		.tl_d_i(tl_dccm_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) DEBUG_ROM(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_4),
-		.tl_h_o(sm1_s1n_4),
-		.tl_d_o(tl_debug_rom_o),
-		.tl_d_i(tl_debug_rom_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) TIMER(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_5),
-		.tl_h_o(sm1_s1n_5),
-		.tl_d_o(tl_timer0_o),
-		.tl_d_i(tl_timer0_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) UART(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_6),
-		.tl_h_o(sm1_s1n_6),
-		.tl_d_o(tl_uart_o),
-		.tl_d_i(tl_uart_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) SPI(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_7),
-		.tl_h_o(sm1_s1n_7),
-		.tl_d_o(tl_spi_o),
-		.tl_d_i(tl_spi_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) PWM(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_8),
-		.tl_h_o(sm1_s1n_8),
-		.tl_d_o(tl_pwm_o),
-		.tl_d_i(tl_pwm_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) GPIO(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_9),
-		.tl_h_o(sm1_s1n_9),
-		.tl_d_o(tl_gpio_o),
-		.tl_d_i(tl_gpio_i)
-	);
-	tlul_socket_m1 #(
-		.HReqDepth(8'h00),
-		.HRspDepth(8'h00),
-		.DReqDepth(4'h0),
-		.DRspDepth(4'h0),
-		.M(2)
-	) PLIC(
-		.clk_i(clk_i),
-		.rst_ni(rst_ni),
-		.tl_h_i(s1n_sm1_10),
-		.tl_h_o(sm1_s1n_10),
-		.tl_d_o(tl_plic_o),
-		.tl_d_i(tl_plic_i)
 	);
 endmodule
 module uart_core (
@@ -25727,109 +23682,161 @@ module uart_core (
 	);
 	assign rdata = (addr == 0 ? control : (addr == 8 ? rx : 0));
 endmodule
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+// Set Parameter CLKS_PER_BIT as follows:
+// CLKS_PER_BIT = (Frequency of i_Clock)/(Frequency of UART)
+// Example: 10 MHz Clock, 115200 baud UART
+// (10000000)/(115200) = 87
+  
 module uart_rx_prog (
-	clk_i,
-	rst_ni,
-	i_Rx_Serial,
-	CLKS_PER_BIT,
-	o_Rx_DV,
-	o_Rx_Byte
-);
-	input wire clk_i;
-	input wire rst_ni;
-	input wire i_Rx_Serial;
-	input wire [15:0] CLKS_PER_BIT;
-	output wire o_Rx_DV;
-	output wire [7:0] o_Rx_Byte;
-	parameter s_IDLE = 3'b000;
-	parameter s_RX_START_BIT = 3'b001;
-	parameter s_RX_DATA_BITS = 3'b010;
-	parameter s_RX_STOP_BIT = 3'b011;
-	parameter s_CLEANUP = 3'b100;
-	reg r_Rx_Data_R;
-	reg r_Rx_Data;
-	reg [15:0] r_Clock_Count;
-	reg [2:0] r_Bit_Index;
-	reg [7:0] r_Rx_Byte;
-	reg r_Rx_DV;
-	reg [2:0] r_SM_Main;
-	always @(posedge clk_i)
-		if (~rst_ni) begin
-			r_Rx_Data_R <= 1'b1;
-			r_Rx_Data <= 1'b1;
-		end
-		else begin
-			r_Rx_Data_R <= i_Rx_Serial;
-			r_Rx_Data <= r_Rx_Data_R;
-		end
-	always @(posedge clk_i or negedge rst_ni)
-		if (~rst_ni) begin
-			r_SM_Main <= s_IDLE;
-			r_Rx_DV <= 1'b0;
-			r_Clock_Count <= 16'b0000000000000000;
-			r_Bit_Index <= 3'b000;
-			r_Rx_Byte <= 8'b00000000;
-		end
-		else
-			case (r_SM_Main)
-				s_IDLE: begin
-					r_Rx_DV <= 1'b0;
-					r_Clock_Count <= 16'b0000000000000000;
-					r_Bit_Index <= 3'b000;
-					r_Rx_Byte <= 8'b00000000;
-					if (r_Rx_Data == 1'b0)
-						r_SM_Main <= s_RX_START_BIT;
-					else
-						r_SM_Main <= s_IDLE;
-				end
-				s_RX_START_BIT:
-					if (r_Clock_Count == ((CLKS_PER_BIT - 1) >> 1)) begin
-						if (r_Rx_Data == 1'b0) begin
-							r_Clock_Count <= 16'b0000000000000000;
-							r_SM_Main <= s_RX_DATA_BITS;
-						end
-						else
-							r_SM_Main <= s_IDLE;
-					end
-					else begin
-						r_Clock_Count <= r_Clock_Count + 16'b0000000000000001;
-						r_SM_Main <= s_RX_START_BIT;
-					end
-				s_RX_DATA_BITS:
-					if (r_Clock_Count < (CLKS_PER_BIT - 1)) begin
-						r_Clock_Count <= r_Clock_Count + 16'b0000000000000001;
-						r_SM_Main <= s_RX_DATA_BITS;
-					end
-					else begin
-						r_Clock_Count <= 16'b0000000000000000;
-						r_Rx_Byte[r_Bit_Index] <= r_Rx_Data;
-						if (r_Bit_Index < 7) begin
-							r_Bit_Index <= r_Bit_Index + 3'b001;
-							r_SM_Main <= s_RX_DATA_BITS;
-						end
-						else begin
-							r_Bit_Index <= 3'b000;
-							r_SM_Main <= s_RX_STOP_BIT;
-						end
-					end
-				s_RX_STOP_BIT:
-					if (r_Clock_Count < (CLKS_PER_BIT - 1)) begin
-						r_Clock_Count <= r_Clock_Count + 16'b0000000000000001;
-						r_SM_Main <= s_RX_STOP_BIT;
-					end
-					else begin
-						r_Rx_DV <= 1'b1;
-						r_Clock_Count <= 16'b0000000000000000;
-						r_SM_Main <= s_CLEANUP;
-					end
-				s_CLEANUP: begin
-					r_SM_Main <= s_IDLE;
-					r_Rx_DV <= 1'b0;
-				end
-				default: r_SM_Main <= s_IDLE;
-			endcase
-	assign o_Rx_DV = r_Rx_DV;
-	assign o_Rx_Byte = r_Rx_Byte;
+   input  wire       clk_i,
+   input  wire       rst_ni,
+   input  wire       i_Rx_Serial,
+   input  wire [15:0] CLKS_PER_BIT,
+   output wire        o_Rx_DV,
+   output wire  [7:0] o_Rx_Byte
+   );
+    
+  parameter s_IDLE         = 3'b000;
+  parameter s_RX_START_BIT = 3'b001;
+  parameter s_RX_DATA_BITS = 3'b010;
+  parameter s_RX_STOP_BIT  = 3'b011;
+  parameter s_CLEANUP      = 3'b100;
+   
+  reg           r_Rx_Data_R ;
+  reg           r_Rx_Data   ;
+   
+  reg [15:0]     r_Clock_Count ;
+  reg [2:0]     r_Bit_Index  ; //8 bits total
+  reg [7:0]     r_Rx_Byte   ;
+  reg           r_Rx_DV     ;
+  reg [2:0]     r_SM_Main   ;
+   
+  // Purpose: Double-register the incoming data.
+  // This allows it to be used in the UART RX Clock Domain.
+  // (It removes problems caused by metastability)
+  always @(posedge clk_i)
+    begin
+    if (~rst_ni) begin
+      r_Rx_Data_R <= 1'b1;
+      r_Rx_Data   <= 1'b1;
+    end else begin
+      r_Rx_Data_R <= i_Rx_Serial;
+      r_Rx_Data   <= r_Rx_Data_R;
+    end
+  end
+   
+   
+  // Purpose: Control RX state machine
+  always @(posedge clk_i or negedge rst_ni)
+    begin
+      if (~rst_ni) begin
+        r_SM_Main <= s_IDLE;
+        r_Rx_DV       <= 1'b0;
+        r_Clock_Count <= 16'b0;
+        r_Bit_Index   <= 3'b0;
+	r_Rx_Byte     <= 8'b0;
+      end else begin       
+      case (r_SM_Main)
+        s_IDLE :
+          begin
+            r_Rx_DV       <= 1'b0;
+            r_Clock_Count <= 16'b0;
+            r_Bit_Index   <= 3'b0;
+            r_Rx_Byte     <= 8'b0; 
+            if (r_Rx_Data == 1'b0)          // Start bit detected
+              r_SM_Main <= s_RX_START_BIT;
+            else
+              r_SM_Main <= s_IDLE;
+          end
+         
+        // Check middle of start bit to make sure it's still low
+        s_RX_START_BIT :
+          begin
+            if (r_Clock_Count == ((CLKS_PER_BIT-1)>>1))
+              begin
+                if (r_Rx_Data == 1'b0)
+                  begin
+                    r_Clock_Count <= 16'b0;  // reset counter, found the middle
+                    r_SM_Main     <= s_RX_DATA_BITS;
+                  end
+                else
+                  r_SM_Main <= s_IDLE;
+              end
+            else
+              begin
+                r_Clock_Count <= r_Clock_Count + 16'b1;
+                r_SM_Main     <= s_RX_START_BIT;
+              end
+          end // case: s_RX_START_BIT
+         
+         
+        // Wait CLKS_PER_BIT-1 clock cycles to sample serial data
+        s_RX_DATA_BITS :
+          begin
+            if (r_Clock_Count < CLKS_PER_BIT-1)
+              begin
+                r_Clock_Count <= r_Clock_Count + 16'b1;
+                r_SM_Main     <= s_RX_DATA_BITS;
+              end
+            else
+              begin
+                r_Clock_Count          <= 16'b0;
+                r_Rx_Byte[r_Bit_Index] <= r_Rx_Data;
+                 
+                // Check if we have received all bits
+                if (r_Bit_Index < 7)
+                  begin
+                    r_Bit_Index <= r_Bit_Index + 3'b1;
+                    r_SM_Main   <= s_RX_DATA_BITS;
+                  end
+                else
+                  begin
+                    r_Bit_Index <= 3'b0;
+                    r_SM_Main   <= s_RX_STOP_BIT;
+                  end
+              end
+          end // case: s_RX_DATA_BITS
+     
+     
+        // Receive Stop bit.  Stop bit = 1
+        s_RX_STOP_BIT :
+          begin
+            // Wait CLKS_PER_BIT-1 clock cycles for Stop bit to finish
+            if (r_Clock_Count < CLKS_PER_BIT-1)
+              begin
+                r_Clock_Count <= r_Clock_Count + 16'b1;
+                r_SM_Main     <= s_RX_STOP_BIT;
+              end
+            else
+              begin
+                r_Rx_DV       <= 1'b1;
+                r_Clock_Count <= 16'b0;
+                r_SM_Main     <= s_CLEANUP;
+              end
+          end // case: s_RX_STOP_BIT
+     
+         
+        // Stay here 1 clock
+        s_CLEANUP :
+          begin
+            r_SM_Main <= s_IDLE;
+            r_Rx_DV   <= 1'b0;
+          end
+         
+         
+        default :
+          r_SM_Main <= s_IDLE;
+         
+      endcase
+      end
+    end   
+   
+  assign o_Rx_DV   = r_Rx_DV;
+  assign o_Rx_Byte = r_Rx_Byte;
+   
 endmodule
 module uart_rx (
 	clk_i,
@@ -26095,7 +24102,7 @@ module uart_tx (
 endmodule
 
 (* blackbox *)
-module sky130_sram_4kbyte_1rw1r_32x1024_8 (clk0, csb0,  web0,   wmask0, addr0, din0, dout0, clk1,       csb1,   addr1, dout1);
+module sky130_sram_4kbyte_1rw1r_32x1024_8 (clk0, csb0, web0, wmask0, addr0, din0, dout0, clk1, csb1, addr1, dout1);
         parameter NUM_WMASKS = 4;
         parameter DATA_WIDTH = 32;
         parameter ADDR_WIDTH = 10;

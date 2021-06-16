@@ -87,22 +87,21 @@ module azadi_soc_top_caravel (
   wire       sd_i;
 
   // Note: Output enable is active low for IO pads
-  assign io_oeb[0]    =  ~jtag_tdo_oe;
-  assign jtag_tdi     =   io_in[0];
-  assign io_out[0]    =   jtag_tdo;
+  assign io_oeb[ 0]    = ~gpio_oe[30];
+  assign gpio_i[30]    =  io_in  [ 0];
+  assign io_out[ 0]    =  gpio_o [30];
 
   // SPI 0
-  assign io_oeb[1]     = ~(sd_oe | gpio_oe[30]);
-  assign io_out[1]     =  sd_oe ? sd_o : gpio_o[30];
-  assign gpio_i[30]    =  io_in[1];
+  assign io_oeb[1]     = ~(sd_oe | gpio_oe[31]);
+  assign io_out[1]     =  sd_oe ? sd_o : gpio_o[31];
+  assign gpio_i[31]    =  io_in[1];
 
   assign io_oeb[2]     =  1'b1;
   assign io_out[2]     =  1'b0; 
   assign sd_i          =  io_in[2];
 
-  assign io_oeb[3]     = ~(sd_oe | gpio_oe[31]);
-  assign io_out[3]     =  sd_oe ? ss_o[0] : gpio_o[31];
-  assign gpio_i[31]    =  io_in[3];
+  assign io_oeb[3]     = ~sd_oe;
+  assign io_out[3]     =  ss_o[0];
 
   assign io_oeb[4]     =  1'b0;
   assign io_out[4]     =  sclk_o;
@@ -138,21 +137,18 @@ module azadi_soc_top_caravel (
   assign io_out[29]    =  sd_oe ?  ss_o[3] :  gpio_o [21];  // SPI slave sel[3]
   assign gpio_i[21]    =  io_in[29];
 
-  // GPIO 22-24, JTAG in
+  // GPIO 22-24
   assign io_oeb[30]    =  ~gpio_oe[22];
   assign io_out[30]    =   gpio_o [22];  
   assign gpio_i[22]    =   io_in[30];
-  assign jtag_tck      =   io_in[30];  // JTAG TCK
 
   assign io_oeb[31]    =  ~gpio_oe[23];
   assign io_out[31]    =   gpio_o [23];  
   assign gpio_i[23]    =   io_in[31];
-  assign jtag_tms      =   io_in[31];  // JTAG TMS
 
   assign io_oeb[32]    =  ~gpio_oe[24];
   assign io_out[32]    =   gpio_o [24];  
   assign gpio_i[24]    =   io_in[32];
-  assign jtag_trst     =   io_in[32];  // JTAG TRST
   
   // GPIO 25-26, PWM 1, 2
   assign io_oeb[33]     = ~(pwm1_oe | gpio_oe[25]);  // PWM1 

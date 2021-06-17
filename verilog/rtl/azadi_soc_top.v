@@ -1420,13 +1420,11 @@ module rstmgr (
 	clk_i,
 	rst_ni,
 	prog_rst_ni,
-	ndmreset,
 	sys_rst_ni
 );
 	input clk_i;
 	input rst_ni;
 	input prog_rst_ni;
-	input wire ndmreset;
 	output reg sys_rst_ni;
 	reg [1:0] rst_fsm_cs;
 	reg [1:0] rst_fsm_ns;

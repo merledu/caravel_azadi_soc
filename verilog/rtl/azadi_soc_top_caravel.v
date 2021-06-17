@@ -4,53 +4,23 @@
 
 module azadi_soc_top_caravel (
   `ifdef USE_POWER_PINS
-      inout vdda1,	// User area 1 3.3V supply
-      inout vdda2,	// User area 2 3.3V supply
-      inout vssa1,	// User area 1 analog ground
-      inout vssa2,	// User area 2 analog ground
       inout vccd1,	// User area 1 1.8V supply
-      inout vccd2,	// User area 2 1.8v supply
       inout vssd1,	// User area 1 digital ground
-      inout vssd2,	// User area 2 digital ground
   `endif
 
     // Wishbone Slave ports (WB MI A)
     input         wb_clk_i,
     input         wb_rst_i,
-    input         wbs_stb_i,
-    input         wbs_cyc_i,
-    input         wbs_we_i,
-    input [3:0]   wbs_sel_i,
-    input [31:0]  wbs_dat_i,
-    input [31:0]  wbs_adr_i,
-    output        wbs_ack_o,
-    output [31:0] wbs_dat_o,
 
     // Logic Analyzer Signals
-    input  [127:0] la_data_in,
-    output [127:0] la_data_out,
-    input  [127:0] la_oenb,
+    input  [15:0] la_data_in,
 
     // IOs, MPRJ_IO_PADS = 38
     input  [`MPRJ_IO_PADS-1:0] io_in,  
     output [`MPRJ_IO_PADS-1:0] io_out,
-    output [`MPRJ_IO_PADS-1:0] io_oeb,
-
-    // Analog (direct connection to GPIO pad---use with caution)
-    // Note that analog I/O is not available on the 7 lowest-numbered
-    // GPIO pads, and so the analog_io indexing is offset from the
-    // GPIO indexing by 7 (also upper 2 GPIOs do not have analog_io).
-    inout [`MPRJ_IO_PADS-10:0] analog_io,
-
-    // Independent clock (on independent integer divider)
-    input   user_clock2,
-
-    // User maskable interrupt signals
-    output [2:0] user_irq
+    output [`MPRJ_IO_PADS-1:0] io_oeb
 );
 
-  wire clk_i;  
-  wire rst_ni; 
   wire prog;
   
   // Clocks per bit
@@ -60,14 +30,6 @@ module azadi_soc_top_caravel (
   wire [31:0] gpio_i;
   wire [31:0] gpio_o;
   wire [31:0] gpio_oe;
-
-  // jtag interface 
-  wire jtag_tck;   
-  wire jtag_tms;   
-  wire jtag_trst; 
-  wire jtag_tdi;   
-  wire jtag_tdo;   
-  wire jtag_tdo_oe;
 
   // uart-periph interface
   wire uart_tx;
@@ -86,15 +48,21 @@ module azadi_soc_top_caravel (
   wire       sd_oe;       
   wire       sd_i;
 
+  // unused wires
+  wire unused_00;
+  wire unused_01;
+  wire unused_02;
+  wire unused_03;
+
   // Note: Output enable is active low for IO pads
   assign io_oeb[ 0]    = ~gpio_oe[30];
   assign gpio_i[30]    =  io_in  [ 0];
   assign io_out[ 0]    =  gpio_o [30];
 
   // SPI 0
-  assign io_oeb[1]     = ~(sd_oe | gpio_oe[31]);
-  assign io_out[1]     =  sd_oe ? sd_o : gpio_o[31];
-  assign gpio_i[31]    =  io_in[1];
+  assign io_oeb[1]     = ~sd_oe;
+  assign io_out[1]     =  sd_o;
+  assign unused_00     =  io_in[1];
 
   assign io_oeb[2]     =  1'b1;
   assign io_out[2]     =  1'b0; 
@@ -102,9 +70,11 @@ module azadi_soc_top_caravel (
 
   assign io_oeb[3]     = ~sd_oe;
   assign io_out[3]     =  ss_o[0];
+  assign unused_01     =  io_in[3];
 
   assign io_oeb[4]     =  1'b0;
   assign io_out[4]     =  sclk_o;
+  assign unused_02     =  io_in[4];
 
   // UART 
   assign io_oeb[5]     =  1'b1;
@@ -113,6 +83,7 @@ module azadi_soc_top_caravel (
 
   assign io_oeb[6]     =  1'b0;
   assign io_out[6]     =  uart_tx;
+  assign unused_03     =  io_in[6];
     
   // Programming Button 
   assign io_oeb[7]     =  1'b1;
@@ -123,6 +94,10 @@ module azadi_soc_top_caravel (
   assign io_oeb[25:8]  = ~gpio_oe[18:0];
   assign gpio_i[18:0]  =  io_in  [25:8];
   assign io_out[25:8]  =  gpio_o [18:0];
+
+  assign io_oeb[26]    = ~gpio_oe[31];
+  assign gpio_i[31]    =  io_in  [26];
+  assign io_out[26]    =  gpio_o [31];
   
   // GPIO 19-21, SPI SS
   assign io_oeb[27]    = ~(sd_oe | gpio_oe[19]);

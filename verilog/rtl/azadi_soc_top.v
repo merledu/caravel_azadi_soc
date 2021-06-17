@@ -17011,6 +17011,7 @@ module preprocess_mvp (
 	assign NaN_b_SO = NaN_b_SP;
 	assign SNaN_SO = SNaN_SP;
 endmodule
+
 module prim_clock_gating (
 	clk_i,
 	en_i,

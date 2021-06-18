@@ -263,6 +263,7 @@ module azadi_soc_top (
 		.o_Rx_DV(rx_dv_i),
 		.o_Rx_Byte(rx_byte_i)
 	);
+
 	instr_mem_top iccm_adapter(
 		.clk_i(clk_i),
 		.rst_ni(system_rst_ni),
@@ -279,23 +280,21 @@ module azadi_soc_top (
 		.we_o(instr_we),
 		.rdata_i(instr_rdata)
 	);
-	wire [31:0] un_conn1;
-	sky130_sram_4kbyte_1rw1r_32x1024_8 u_iccm(
-		`ifdef USE_POWER_PINS
-  	  .vccd1(VPWR),	
-  	  .vssd1(VGND),	
-  	`endif
-		.clk0(clk_i),
-		.csb0(instr_csb),
-		.web0(instr_we),
-		.wmask0(instr_wmask),
-		.addr0(instr_addr[9:0]),
-		.din0(instr_wdata),
-		.dout0(instr_rdata),
-		.clk1(1'b0),
-		.csb1(1'b1),
-		.addr1({10 {1'sb0}}),
-		.dout1(un_conn1)
+
+    wire [3:0] WE_instr;
+    assign WE_instr = instr_wmask & {4{~instr_we}};
+
+    DFFRAM u_iccm(
+	    `ifdef USE_POWER_PINS
+	        .VPWR(VPWR),
+	        .VGND(VGND),
+    	`endif
+		.CLK(clk_i),
+		.WE(WE_instr),
+		.EN(~instr_csb),
+		.Di(instr_wdata),
+		.Do(instr_rdata),
+		.A(instr_addr[7:0])
 	);
 	data_mem_top dccm_adapter(
 		.clk_i(clk_i),
@@ -309,23 +308,19 @@ module azadi_soc_top (
 		.we_o(data_we),
 		.rdata_i(data_rdata)
 	);
-	wire [31:0] un_conn2;
-	sky130_sram_4kbyte_1rw1r_32x1024_8 u_dccm(
-		`ifdef USE_POWER_PINS
-  	  .vccd1(VPWR),	
-  	  .vssd1(VGND),	
-  	`endif
-		.clk0(clk_i),
-		.csb0(instr_csb),
-		.web0(data_we),
-		.wmask0(data_wmask),
-		.addr0(data_addr[9:0]),
-		.din0(data_wdata),
-		.dout0(data_rdata),
-		.clk1(1'b0),
-		.csb1(1'b1),
-		.addr1({10 {1'sb0}}),
-		.dout1(un_conn2)
+	wire [3:0] WE_data;
+    assign WE_data = data_wmask & {4{~data_we}};
+    DFFRAM u_dccm(
+	    `ifdef USE_POWER_PINS
+	        .VPWR(VPWR),
+	        .VGND(VGND),
+    	`endif
+		.CLK(clk_i),
+		.WE(WE_data),
+		.EN(~data_csb),
+		.Di(data_wdata),
+		.Do(data_rdata),
+		.A(data_addr[7:0])
 	);
 endmodule
 module brq_core (

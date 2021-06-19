@@ -1,14 +1,14 @@
 ---
 project:
-  description: "A template SoC for Google sponsored Open MPW shuttles for SKY130."
+  description: "Azadi is an SoC which uses extended version of Ibex core with 'F-Extension' (RISC-V Standard Extension) for Single Precision Floating Point and limited number of peripherals."
   foundry: "SkyWater"
-  git_url: "https://github.com/efabless/caravel_project_example.git"
-  organization: "Efabless"
-  organization_url: "http://efabless.com"
-  owner: "Tim Edwards"
+  git_url: "https://github.com/merledu/caravel_azadi_soc.git"
+  organization: "Micro Electronics Research Lab - Usman Institute of Technology"
+  organization_url: "http://merledupk.org"
+  owner: "MERL"
   process: "SKY130"
-  project_name: "Caravel"
-  project_id: "00000000"
+  project_name: "Azadi-SoC"
+  project_id: "00000051"
   tags:
     - "Open MPW"
     - "Test Harness"

@@ -3,8 +3,8 @@
 `default_nettype wire
 module azadi_soc_top (
 	`ifdef USE_POWER_PINS
-    inout VPWR,	// User area 1 1.8V supply
-    inout VGND,	// User area 1 digital ground
+    inout vccd1,	// User area 1 1.8V supply
+    inout vssd1,	// User area 1 digital ground
   `endif
 	clk_i,
 	rst_ni,
@@ -282,8 +282,8 @@ module azadi_soc_top (
 	wire [31:0] un_conn1;
 	sky130_sram_4kbyte_1rw1r_32x1024_8 u_iccm(
 		`ifdef USE_POWER_PINS
-  	  .vccd1(VPWR),	
-  	  .vssd1(VGND),	
+  	  .vccd1(vccd1),	
+  	  .vssd1(vssd1),	
   	`endif
 		.clk0(clk_i),
 		.csb0(instr_csb),
@@ -312,8 +312,8 @@ module azadi_soc_top (
 	wire [31:0] un_conn2;
 	sky130_sram_4kbyte_1rw1r_32x1024_8 u_dccm(
 		`ifdef USE_POWER_PINS
-  	  .vccd1(VPWR),	
-  	  .vssd1(VGND),	
+  	  .vccd1(vccd1),	
+  	  .vssd1(vssd1),	
   	`endif
 		.clk0(clk_i),
 		.csb0(data_csb),

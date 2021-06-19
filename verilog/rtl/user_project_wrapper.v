@@ -91,22 +91,9 @@ azadi_soc_top_caravel mprj(
   `endif
     .wb_clk_i(wb_clk_i),
     .wb_rst_i(wb_rst_i),
-    .wbs_stb_i(wbs_stb_i),
-    .wbs_cyc_i(wbs_cyc_i),
-    .wbs_we_i(wbs_we_i),
-    .wbs_sel_i(wbs_sel_i),
-    .wbs_dat_i(wbs_dat_i),
-    .wbs_adr_i(wbs_adr_i),
-    .wbs_ack_o(wbs_ack_o),
-    .wbs_dat_o(wbs_dat_o),
-    .la_data_in(la_data_in),
-    .la_data_out(la_data_out),
-    .la_oenb(la_oenb),
+    .la_data_in(la_data_in[15:0]),
     .io_in(io_in),  
     .io_out(io_out),
-    .io_oeb(io_oeb),
-    .analog_io(analog_io),
-    .user_clock2(user_clock2),
-    .user_irq(user_irq)
+    .io_oeb(io_oeb)
 );
 endmodule

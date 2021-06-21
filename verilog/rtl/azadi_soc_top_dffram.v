@@ -3,8 +3,8 @@
 `default_nettype wire
 module azadi_soc_top (
 	`ifdef USE_POWER_PINS
-    inout vccd1,	// User area 1 1.8V supply
-    inout vssd1,	// User area 1 digital ground
+    inout VPWR,	// User area 1 1.8V supply
+    inout VGND,	// User area 1 digital ground
   `endif
 	clk_i,
 	rst_ni,
@@ -286,8 +286,8 @@ module azadi_soc_top (
 
     DFFRAM u_iccm(
 	    `ifdef USE_POWER_PINS
-	        .VPWR(vccd1),
-	        .VGND(vssd1),
+	        .VPWR(VPWR),
+	        .VGND(VGND),
     	`endif
 		.CLK(clk_i),
 		.WE(WE_instr),
@@ -312,8 +312,8 @@ module azadi_soc_top (
     assign WE_data = data_wmask & {4{~data_we}};
     DFFRAM u_dccm(
 	    `ifdef USE_POWER_PINS
-	        .VPWR(vccd1),
-	        .VGND(vssd1),
+	        .VPWR(VPWR),
+	        .VGND(VGND),
     	`endif
 		.CLK(clk_i),
 		.WE(WE_data),

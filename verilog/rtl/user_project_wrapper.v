@@ -79,15 +79,9 @@ module user_project_wrapper #(
 );
 
 azadi_soc_top_caravel mprj(
-  `ifdef USE_POWER_PINS
-      .vdda1(vdda1),	 
-      .vdda2(vdda2),	 
-      .vssa1(vssa1),	
-      .vssa2(vssa2),	
-      .vccd1(vccd1),	 
-      .vccd2(vccd2),	 
-      .vssd1(vssd1),	
-      .vssd2(vssd2),	
+  `ifdef USE_POWER_PINS	
+      .VPWR(vccd1),	 // User area 1 1.8V power
+      .VGND(vssd1),  // User area 1 digital ground		
   `endif
     .wb_clk_i(wb_clk_i),
     .wb_rst_i(wb_rst_i),

@@ -285,7 +285,7 @@ module azadi_soc_top (
     assign WE_instr = instr_wmask & {4{~instr_we}};
 
     DFFRAM #(
-			.COLS=2
+			.COLS(2)
 		)u_iccm(
 	    `ifdef USE_POWER_PINS
 	        .VPWR(VPWR),
@@ -313,7 +313,7 @@ module azadi_soc_top (
 	wire [3:0] WE_data;
     assign WE_data = data_wmask & {4{~data_we}};
     DFFRAM #(
-			.COLS=2
+			.COLS(2)
 		)u_dccm(
 	    `ifdef USE_POWER_PINS
 	        .VPWR(VPWR),

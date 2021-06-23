@@ -296,7 +296,7 @@ module azadi_soc_top (
 		.EN(~instr_csb),
 		.Di(instr_wdata),
 		.Do(instr_rdata),
-		.A(instr_addr[8:0])
+		.A(instr_addr[9:0])
 	);
 	data_mem_top dccm_adapter(
 		.clk_i(clk_i),
@@ -324,7 +324,7 @@ module azadi_soc_top (
 		.EN(~data_csb),
 		.Di(data_wdata),
 		.Do(data_rdata),
-		.A(data_addr[8:0])
+		.A(data_addr[9:0])
 	);
 endmodule
 module brq_core (

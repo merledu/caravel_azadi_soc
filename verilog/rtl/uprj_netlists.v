@@ -21,8 +21,12 @@
     // Assume default net type to be wire because GL netlists don't have the wire definitions
     `default_nettype wire
     `include "gl/user_project_wrapper.v"
-    `include "gl/user_proj_example.v"
+    // `include "gl/azadi_soc_top_caravel.v"
 `else
     `include "user_project_wrapper.v"
-    `include "user_proj_example.v"
+    `include "azadi_soc_top_caravel.v"
+    `include "azadi_soc_top_dffram.v"
+    // `include "azadi_soc_top_dffram_2kb.v"
+    // `include "azadi_soc_top_dffram_4kb.v"
+    // `include "azadi_soc_top_sram.v"
 `endif

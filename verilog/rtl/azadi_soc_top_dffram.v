@@ -17448,47 +17448,31 @@ module pwm (
 	parameter adr_divisor_2 = 20;
 	parameter adr_period_2 = 24;
 	parameter adr_DC_2 = 28;
-	reg [7:0] ctrl;
+	reg [2:0] ctrl;
 	reg [15:0] period;
 	reg [15:0] DC_1;
 	reg [15:0] divisor;
-	reg [7:0] ctrl_2;
+	reg [2:0] ctrl_2;
 	reg [15:0] period_2;
 	reg [15:0] DC_2;
 	reg [15:0] divisor_2;
 	wire write;
 	assign write = we_i & ~re_i;
-	always @(posedge clk_i)
-		if (~rst_ni) begin
-			ctrl[4:2] <= 3'b000;
-			ctrl[0] <= 1'b0;
-			ctrl[1] <= 1'b0;
-			ctrl[7:5] <= 3'b000;
+	always @(posedge clk_i) begin
+		if (!rst_ni) begin
+			ctrl <= 3'b000;
 			DC_1 <= 16'b0000000000000000;
 			period <= 16'b0000000000000000;
 			divisor <= 16'b0000000000000000;
-			ctrl_2[4:2] <= 3'b000;
-			ctrl_2[0] <= 1'b0;
-			ctrl_2[7:5] <= 3'b000;
-			ctrl_2[1] <= 1'b0;
+			ctrl_2 <= 3'b000;
 			DC_2 <= 16'b0000000000000000;
 			period_2 <= 16'b0000000000000000;
 			divisor_2 <= 16'b0000000000000000;
 		end
-		else if (write)
+		else if (write) begin
 			case (addr_i)
-				adr_ctrl_1: begin
-					ctrl[0] <= wdata_i[0];
-					ctrl[1] <= 1'b1;
-					ctrl[4:2] <= wdata_i[4:2];
-					ctrl[7:5] <= wdata_i[7:5];
-				end
-				adr_ctrl_2: begin
-					ctrl_2[0] <= wdata_i[0];
-					ctrl_2[1] <= 1'b1;
-					ctrl_2[4:2] <= wdata_i[4:2];
-					ctrl_2[7:5] <= wdata_i[7:5];
-				end
+				adr_ctrl_1: ctrl <= wdata_i[2:0];
+				adr_ctrl_2: ctrl_2 <= wdata_i[2:0];
 				adr_divisor_1: divisor <= wdata_i[15:0];
 				adr_period_1: period <= wdata_i[15:0];
 				adr_DC_1: DC_1 <= wdata_i[15:0];
@@ -17496,6 +17480,8 @@ module pwm (
 				adr_period_2: period_2 <= wdata_i[15:0];
 				adr_DC_2: DC_2 <= wdata_i[15:0];
 			endcase
+		end
+	end
 	wire pwm_1;
 	assign pwm_1 = ctrl[1];
 	wire pwm_2;
@@ -17531,12 +17517,13 @@ module pwm (
 				end
 			end
 		end
-	always @(posedge clock_p1)
-		if (~rst_ni) begin
+	always @(posedge clock_p1 or negedge rst_ni)
+		if (!rst_ni) begin
 			pts <= 1'b0;
+			oe_pwm1 <= 1'b0;
 			period_counter1 <= 16'b0000000000000000;
 		end
-		else if (ctrl[2]) begin
+		else if (ctrl[0]) begin
 			if (pwm_1) begin
 				oe_pwm1 <= 1'b1;
 				if (period_counter1 >= period)
@@ -17549,17 +17536,14 @@ module pwm (
 					pts <= 1'b0;
 			end
 		end
-		else begin
-			pts <= 1'b0;
-			period_counter1 <= 16'b0000000000000000;
-			oe_pwm1 <= 1'b0;
-		end
-	always @(posedge clock_p2)
-		if (~rst_ni) begin
+
+	always @(posedge clock_p2 or negedge rst_ni)
+		if (!rst_ni) begin
 			pts_2 <= 1'b0;
+			oe_pwm2 <= 1'b0;
 			period_counter2 <= 16'b0000000000000000;
 		end
-		else if (ctrl_2[2]) begin
+		else if (ctrl_2[0]) begin
 			if (pwm_2) begin
 				oe_pwm2 <= 1'b1;
 				if (period_counter2 >= period_2)
@@ -17572,14 +17556,10 @@ module pwm (
 					pts_2 <= 1'b0;
 			end
 		end
-		else begin
-			pts_2 <= 1'b0;
-			period_counter2 <= 16'b0000000000000000;
-			oe_pwm2 <= 1'b0;
-		end
-	assign o_pwm = (ctrl[4] ? pts : 1'b0);
-	assign o_pwm_2 = (ctrl_2[4] ? pts_2 : 1'b0);
-	assign rdata_o = (addr_i == adr_ctrl_1 ? {8'h00, ctrl} : (addr_i == adr_divisor_1 ? divisor : (addr_i == adr_period_1 ? period : (addr_i == adr_DC_1 ? DC_1 : (addr_i == adr_DC_2 ? DC_2 : (addr_i == adr_period_2 ? period_2 : (addr_i == adr_divisor_2 ? divisor_2 : (addr_i == adr_ctrl_2 ? {8'h00, ctrl_2} : 32'b00000000000000000000000000000000))))))));
+
+	assign o_pwm = (ctrl[2] ? pts : 1'b0);
+	assign o_pwm_2 = (ctrl_2[2] ? pts_2 : 1'b0);
+	assign rdata_o = (addr_i == adr_ctrl_1 ? {13'h0, ctrl} : (addr_i == adr_divisor_1 ? divisor : (addr_i == adr_period_1 ? period : (addr_i == adr_DC_1 ? DC_1 : (addr_i == adr_DC_2 ? DC_2 : (addr_i == adr_period_2 ? period_2 : (addr_i == adr_divisor_2 ? divisor_2 : (addr_i == adr_ctrl_2 ? {13'h0, ctrl_2} : 32'b00000000000000000000000000000000))))))));
 endmodule
 module rr_arb_tree_252F1_F315E (
 	clk_i,

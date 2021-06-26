@@ -283,7 +283,7 @@ module azadi_soc_top (
 	);
 
     wire [3:0] WE_instr;
-    assign WE_instr = instr_wmask & {4{~instr_we}};
+    assign WE_instr = instr_wmask & {4{instr_we}};
 
     DFFRAM u_iccm(
 	    `ifdef USE_POWER_PINS
@@ -292,7 +292,7 @@ module azadi_soc_top (
     	`endif
 		.CLK(clk_i),
 		.WE(WE_instr),
-		.EN(~instr_csb),
+		.EN(instr_csb),
 		.Di(instr_wdata),
 		.Do(instr_rdata),
 		.A(instr_addr[7:0])
@@ -310,7 +310,7 @@ module azadi_soc_top (
 		.rdata_i(data_rdata)
 	);
 	wire [3:0] WE_data;
-    assign WE_data = data_wmask & {4{~data_we}};
+    assign WE_data = data_wmask & {4{data_we}};
     DFFRAM u_dccm(
 	    `ifdef USE_POWER_PINS
 	        .VPWR(VPWR),
@@ -318,7 +318,7 @@ module azadi_soc_top (
     	`endif
 		.CLK(clk_i),
 		.WE(WE_data),
-		.EN(~data_csb),
+		.EN(data_csb),
 		.Di(data_wdata),
 		.Do(data_rdata),
 		.A(data_addr[7:0])
@@ -10848,8 +10848,8 @@ module data_mem_top (
 	assign wmask_o[1] = (tl_wmask[15:8] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign wmask_o[2] = (tl_wmask[23:16] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign wmask_o[3] = (tl_wmask[31:24] != 8'b00000000 ? 1'b1 : 1'b0);
-	assign we_o = ~we_i;
-	assign csb = ~tl_req;
+	assign we_o = we_i;
+	assign csb = tl_req;
 	tlul_sram_adapter #(
 		.SramAw(12),
 		.SramDw(32),
@@ -16120,10 +16120,10 @@ module instr_mem_top (
 	assign mask_sel[1] = (tl_wmask[15:8] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign mask_sel[2] = (tl_wmask[23:16] != 8'b00000000 ? 1'b1 : 1'b0);
 	assign mask_sel[3] = (tl_wmask[31:24] != 8'b00000000 ? 1'b1 : 1'b0);
-	assign csb = ~1'b1;
+	assign csb = tl_req | iccm_ctrl_we;
 	assign addr_o = (prog_rst_ni ? tl_addr : iccm_ctrl_addr);
 	assign wdata_o = (prog_rst_ni ? tl_wdata : iccm_ctrl_wdata);
-	assign we_o = ~(prog_rst_ni ? tl_we : iccm_ctrl_we);
+	assign we_o = prog_rst_ni ? tl_we : iccm_ctrl_we;
 	assign wmask_o = (prog_rst_ni ? mask_sel : 4'b1111);
 	tlul_sram_adapter #(
 		.SramAw(12),

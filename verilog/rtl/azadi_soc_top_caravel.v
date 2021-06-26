@@ -94,7 +94,7 @@ module azadi_soc_top_caravel (
 
   // UART 
   assign io_oeb[5]     =  1'b1;
-  assign io_out[2]     =  1'b0;
+  assign io_out[5]     =  1'b0;
   assign uart_rx       =  io_in[5];
 
   assign io_oeb[6]     =  1'b0;
@@ -103,7 +103,7 @@ module azadi_soc_top_caravel (
     
   // Programming Button 
   assign io_oeb[7]     =  1'b1;
-  assign io_out[2]     =  1'b0;
+  assign io_out[7]     =  1'b0;
   assign prog          =  io_in[7];
 
   // GPIO 0-18
@@ -164,7 +164,7 @@ module azadi_soc_top_caravel (
     .VGND(VGND),
   `endif
     .clk_i(wb_clk_i),
-    .rst_ni(wb_rst_i),
+    .rst_ni(~wb_rst_i),
     .prog(prog),
 
     // Clocks per bits

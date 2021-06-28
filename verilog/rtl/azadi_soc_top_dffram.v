@@ -21947,7 +21947,7 @@ module spi_core (
 	wire rx_en;
 	assign spi_divider_sel = (we_i & ~re_i) & (addr_i[6:2] == 5);
 	assign spi_ctrl_sel = (we_i & ~re_i) & (addr_i[6:2] == 4);
-	assign spi_tx_sel = ((we_i & ~re_i) & (addr_i[6:2] == 0)) & tx_en;
+	assign spi_tx_sel = ((we_i & ~re_i) & (addr_i[6:2] == 0));
 	assign spi_ss_sel = (we_i & ~re_i) & (addr_i[6:2] == 6);
 	always @(addr_i or rx or ctrl or divider or ss)
 		case (addr_i[6:2])

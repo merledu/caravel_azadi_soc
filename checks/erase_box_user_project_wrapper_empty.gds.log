@@ -1,0 +1,46 @@
+/home/zrafique/caravel_azadi_soc/checks/user_project_wrapper_empty.gds /home/zrafique/caravel_azadi_soc/checks/user_project_wrapper_empty_erased.gds user_project_wrapper
+
+Magic 8.3 revision 182 - Compiled on Thu Jun 24 00:42:36 UTC 2021.
+Starting magic under Tcl interpreter
+Using the terminal as the console.
+Using NULL graphics device.
+Processing system .magicrc file
+Sourcing design .magicrc for technology sky130A ...
+2 Magic internal units = 1 Lambda
+Input style sky130(): scaleFactor=2, multiplier=2
+Scaled tech values by 2 / 1 to match internal grid scaling
+Loading sky130A Device Generator Menu ...
+Using technology "sky130A", version 1.0.141-0-gb9ffc1f
+Input style sky130(vendor): scaleFactor=2, multiplier=2
+CIF input style is now "sky130(vendor)"
+Warning: Calma reading is not undoable!  I hope that's OK.
+Library written using GDS-II Release 3.0
+Library name: user_project_wrapper
+Reading "user_project_wrapper".
+Root cell box:
+           width x height  (   llx,  lly  ), (   urx,  ury  )  area (units^2)
+
+microns:   42.88 x 3520.00  (-42.88,  0.00 ), (  0.00,  3520.00)  150937.59 
+lambda:   4288.00 x 352000.00  (-4288.00,  0.00 ), (  0.00,  352000.00)  1509376000.00
+internal:   8576 x 704000  ( -8576,  0    ), (     0,  704000)  6037504000
+Root cell box:
+           width x height  (   llx,  lly  ), (   urx,  ury  )  area (units^2)
+
+microns:   42.50 x 3520.00  ( 2920.00,  0.00 ), ( 2962.50,  3520.00)  149600.00 
+lambda:   4250.00 x 352000.00  ( 292000.00,  0.00 ), ( 296250.00,  352000.00)  1496000000.00
+internal:   8500 x 704000  ( 584000,  0    ), ( 592500,  704000)  5984000000
+Root cell box:
+           width x height  (   llx,  lly  ), (   urx,  ury  )  area (units^2)
+
+microns:  3005.38 x 37.53   (-42.88, -37.53), ( 2962.50,  0.00 )  112791.91 
+lambda:   300538.00 x 3753.00  (-4288.00, -3753.00), ( 296250.00,  0.00 )  1127919104.00
+internal: 601076 x 7506    ( -8576, -7506 ), ( 592500,  0    )  4511676456
+Root cell box:
+           width x height  (   llx,  lly  ), (   urx,  ury  )  area (units^2)
+
+microns:  3005.38 x 37.21   (-42.88,  3520.00), ( 2962.50,  3557.21)  111830.19 
+lambda:   300538.00 x 3721.00  (-4288.00,  352000.00), ( 296250.00,  355721.00)  1118301952.00
+internal: 601076 x 7442    ( -8576,  704000), ( 592500,  711442)  4473207592
+can't read "errorCode": no such variable
+   Generating output for cell xor_target
+/home/zrafique/caravel_azadi_soc/checks/user_project_wrapper_empty_erased.gds

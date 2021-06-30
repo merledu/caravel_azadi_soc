@@ -1,0 +1,41 @@
+FULL RUN LOG:
+ Executing Step 0 of 8: Extracting GDS Files
+Step 0 done without fatal errors.
+ Executing Step 1 of 8: Project License Check
+{{LICENSE COMPLIANCE PASSED}} Apache-2.0 LICENSE file was found in project root
+ SPDX COMPLIANCE PASSED Project is compliant with SPDX Standard
+ Executing Step 2 of 8: YAML File Check
+ YAML file valid!
+Step 2 done without fatal errors.
+ Detected Project Type is "digital"
+ Executing Step 3 of 8: Project Compliance Checks
+b'Going into /home/zrafique/caravel_azadi_soc/caravel'
+b'Removing manifest'
+b'Fetching manifest'
+b'Running sha1sum checks'
+ Manifest Checks Passed. Caravel Version Matches.
+ Makefile Checks Passed.
+ Documentation Checks Passed.
+ Executing Step 4 of 8: Fuzzy Consistency Checks
+instance caravel found
+instance user_project_wrapper found
+Design is complex and contains: 47 modules
+Design is complex and contains: 933383 modules
+verilog Consistency Checks Passed.
+ Basic Hierarchy Checks Passed.
+{PROGRESS} Running Pins and Power Checks...
+Pins check passed
+Internal Power Checks Passed!
+Power Checks Passed
+ Fuzzy Consistency Checks Passed!
+Step 4 done without fatal errors.
+ Executing Step 5 of 8: XOR Consistency Checks
+ Running XOR Checks...
+Total XOR differences = 15
+ XOR Checks on GDS Failed, Reason: XOR Differences count is 15. Please view /home/zrafique/caravel_azadi_soc/checks/*.xor.* for more details.
+TEST FAILED AT STEP 5
+ Executing Step 6 of 8: DRC Violations Checks
+ Running Magic DRC Checks...
+ DRC Checks on User Project GDS Passed!
+Step 6 done without fatal errors.
+ SOME Checks FAILED !!!

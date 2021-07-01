@@ -20,7 +20,7 @@ Elapsed: 0.010s
 "_input" in: xor.drc:38
 Elapsed: 0.010s
 "^" in: xor.drc:38
-Elapsed: 0.010s
+Elapsed: 0.020s
 XOR differences: 7
 "_output" in: xor.drc:41
 Elapsed: 0.010s
@@ -38,9 +38,9 @@ Elapsed: 0.010s
 "_input" in: xor.drc:38
 Elapsed: 0.010s
 "_input" in: xor.drc:38
-Elapsed: 0.010s
+Elapsed: 0.020s
 "^" in: xor.drc:38
-Elapsed: 0.040s
+Elapsed: 0.030s
 XOR differences: 0
 "_output" in: xor.drc:41
 Elapsed: 0.010s
@@ -75,4 +75,4 @@ XOR differences: 0
 "_output" in: xor.drc:41
 Elapsed: 0.010s
 Writing layout file: /home/zrafique/caravel_azadi_soc/checks/user_project_wrapper.xor.gds ..
-Total run time: 0.350s
+Total run time: 0.360s

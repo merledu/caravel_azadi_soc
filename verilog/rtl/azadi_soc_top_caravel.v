@@ -92,10 +92,11 @@ module azadi_soc_top_caravel (
   assign io_out[4]     =  sclk_o;
   assign unused_02     =  io_in[4];
 
-  // UART 
-  assign io_oeb[5]     =  1'b1;
-  assign io_out[5]     =  1'b0;
+  // UART || GPIO 18
+  assign io_oeb[5]     =  ~gpio_oe[18];
+  assign io_out[5]     =  gpio_o[18];
   assign uart_rx       =  io_in[5];
+  assign gpio_i[18]    =  io_in[5];
 
   assign io_oeb[6]     =  1'b0;
   assign io_out[6]     =  uart_tx;
@@ -106,10 +107,10 @@ module azadi_soc_top_caravel (
   assign io_out[7]     =  1'b0;
   assign prog          =  io_in[7];
 
-  // GPIO 0-18
-  assign io_oeb[25:8]  = ~gpio_oe[18:0];
-  assign gpio_i[18:0]  =  io_in  [25:8];
-  assign io_out[25:8]  =  gpio_o [18:0];
+  // GPIO 0-17
+  assign io_oeb[25:8]  = ~gpio_oe[17:0];
+  assign gpio_i[17:0]  =  io_in  [25:8];
+  assign io_out[25:8]  =  gpio_o [17:0];
 
   assign io_oeb[26]    = ~gpio_oe[31];
   assign gpio_i[31]    =  io_in  [26];
